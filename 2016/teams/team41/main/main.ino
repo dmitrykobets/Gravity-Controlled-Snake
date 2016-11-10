@@ -8,32 +8,37 @@
 
 void initializeOLED(void);
 
-struct segment *appendToHead(struct segment*, const struct point*);
-struct segment *initializeSnake(const struct point[], uint32_t);
+struct Input *updateInputs(void); 
 
-void drawSnake(struct segment*);
+void appendToHead(const struct point*);
+void initializeSnake(const struct point[], uint32_t);
+
+void drawSnake(void);
+void eraseTail(void);
+void drawHead(void);
 
 /*
- * Control constants
+ * Input
  */
-const uint32_t NUM_SWITCHES = 2;
-const uint32_t SWITCHES[NUM_SWITCHES] = { 
-  PA_7, // SW_1
-  PA_6 // SW_2
+struct Input {
+  const uint32_t code;
+  boolean active; // for switches, this corresponds to the "up" position. For buttons, this corresponds to the "pressed" position
 };
-const uint32_t NUM_BUTTONS = 3;
-const uint32_t BUTTONS[NUM_BUTTONS] = { 
-  PD_2, // BTN_1
-  PE_0, // BTN_2
-  PF_0 // right (sw1)
+
+const int NUM_INPUTS = 5;
+static Input INPUTS[NUM_INPUTS] = {
+  {PA_7, false}, // SW_1
+  {PA_6, false}, // SW_2
+  {PD_2, false}, // BTN_1
+  {PE_0, false}, // BTN_2
+  {PF_0, false} // right (sw1)
 };
-const uint32_t POTENTIOMETER = PE_3;
+struct Input *lastActive;
 
 /*
  * Game control constants
  */
-const uint32_t FPS = 60;
-
+const uint32_t FPS = 10;
 
 struct point {
   uint32_t x;
@@ -43,36 +48,34 @@ struct point {
 /*
  * Snake components
  */
-struct segment {
+struct Segment {
   struct point coords;
-  struct segment *next; // towards head
-  struct segment *prev; // towards tail
+  struct Segment *next; // towards head
+  struct Segment *prev; // towards tail
 };
 
-struct part *head;
-struct part *tail;
+struct Segment *head = NULL;
+struct Segment *tail = NULL;
+struct Segment *current = NULL;
 
 enum direction {
   UP,
   DOWN,
   LEFT,
   RIGHT
-} dir;
+} direction;
 
 void setup() {
 
   Serial.begin(9600);
 
   initializeOLED();
-  for (int i = 0; i < NUM_BUTTONS; i ++) {
-    pinMode(BUTTONS[i], INPUT);
-  }
-  for (int i = 0; i < NUM_SWITCHES; i ++) {
-    pinMode(SWITCHES[i], INPUT);
+  for (int i = 0; i < NUM_INPUTS; i ++) {
+    pinMode(INPUTS[i].code, INPUT);
   }
 
   uint32_t numPoints = 9;
-  struct segment *head = initializeSnake((const struct point[]) {
+  initializeSnake((const struct point[]) {
     {11, 11}, 
     {12, 11}, 
     {13, 11}, 
@@ -84,11 +87,35 @@ void setup() {
     {18, 10}
     }, numPoints); 
   
-  drawSnake(head);
+  drawSnake();
   OrbitOledUpdate();
 }
 
 void loop() {
+
+  lastActive = updateInputs();
+  if (lastActive) {
+    switch(lastActive->code) {
+      case PD_2: //BTN_1
+        if (lastActive->active)
+          direction = DOWN;
+        break;
+      case PE_0: //BTN_2
+        if (lastActive->active)
+          direction = UP;
+        break;
+      case PA_6: //SW_2
+        if (lastActive->active)
+          direction = RIGHT;
+        else
+          direction = LEFT;
+        break;
+    }
+  }
+  moveSnake();
+  OrbitOledUpdate();
+
+  DelayMs(1000/FPS);
 /*
 if (alive) {
 
@@ -126,12 +153,6 @@ if (alive) {
   Serial.print(" ");
   Serial.println(tail->y, DEC);
 
-  tail->prev = head;
-  current = tail;
-  tail = tail->next;
-  tail->prev = NULL;
-  head->next = current;
-  head = current;
 
   Serial.println("swapping");
   Serial.print(head->x, DEC);
@@ -174,49 +195,95 @@ OrbitOledDrawString("You Died");
   } else {
     thing = RIGHT;
   }*/
-  DelayMs(1000/FPS);
 }
-
-//void readControls()
 
 /*
  * Create a new node and set it as the new head of the linked list
  * 
- * struct segment* head -- the head of the linked list
+ * struct Segment* head -- the head of the linked list
  * uint32_t x, y -- the coordinates of the new head
  */
-struct segment *appendToHead(struct segment* head, const struct point *coords) {
-  struct segment* newHead = (struct segment*)malloc(sizeof(struct segment));
+void appendToHead(const struct point *coords) {
+  struct Segment* newHead = (struct Segment*)malloc(sizeof(struct Segment));
   newHead->coords = *coords;
   
   newHead->next = NULL;
   newHead->prev = head;
+  
   if (head) {
     head->next = newHead;
+    if (!tail) {
+      tail = head;
+    }
   }
-
-  return newHead;
+  head = newHead;
 }
 
 /*
  * Create a linked list based off an array of coordinates and return the head
  */
-struct segment *initializeSnake(const struct point coords[], uint32_t numCoords) {
-  struct segment *head = NULL;
+void initializeSnake(const struct point coords[], uint32_t numCoords) {
   for (int i = 0; i < numCoords; i ++) {
-    head = appendToHead(head, &coords[i]);
+    appendToHead(&coords[i]);
   }
-  return head;
 }
 
-void drawSnake(struct segment *head) {
-  OrbitOledSetDrawMode(modOledSet);
-  
-  while (head) {
-    OrbitOledMoveTo(head->coords.x, head->coords.y);
-    OrbitOledDrawPixel();
-    head = head->prev;
+void moveSnake() {
+
+  eraseTail();
+  switch(direction) {
+    case LEFT:
+      tail->coords.x = head->coords.x-1;
+      tail->coords.y = head->coords.y;
+      Serial.println("moving LEFT");  
+      break;
+    case RIGHT:
+      tail->coords.x = head->coords.x+1;
+      tail->coords.y = head->coords.y;
+      Serial.println("moving RIGHT"); 
+      break;
+    case UP:
+      tail->coords.y = head->coords.y-1;
+      tail->coords.x = head->coords.x;
+      Serial.println("moving UP");  
+      break;
+    case DOWN:
+      tail->coords.y = head->coords.y+1;
+      tail->coords.x = head->coords.x;
+      Serial.println("moving DOWN");  
+      break;
   }
+
+  current = tail;
+  tail->prev = head;
+  current = tail;
+  tail = tail->next;
+  tail->prev = NULL;
+  head->next = current;
+  head = current;
+
+  drawHead();
+}
+
+void drawSnake(void) {
+  OrbitOledSetDrawMode(modOledSet);
+  current = head;
+  while (current) {
+    OrbitOledMoveTo(current->coords.x, current->coords.y);
+    OrbitOledDrawPixel();
+    current = current->prev;
+  }
+}
+
+void eraseTail(void) {
+  OrbitOledSetDrawMode(modOledXor); 
+  OrbitOledMoveTo(tail->coords.x, tail->coords.y);
+  OrbitOledDrawPixel();
+}
+void drawHead(void) {
+  OrbitOledSetDrawMode(modOledSet); 
+  OrbitOledMoveTo(head->coords.x, head->coords.y);
+  OrbitOledDrawPixel();
 }
 
 void initializeOLED(void) {
@@ -224,6 +291,26 @@ void initializeOLED(void) {
   OrbitOledClear();
   OrbitOledClearBuffer();
   OrbitOledSetFillPattern(OrbitOledGetStdPattern(iptnSolid));
+}
+
+
+/*
+ * Reads and updates all of the input states
+ * Returns a pointer to the input which has just had its active state flipped to "true"
+ *  - if more than one input meets the above criteria, return a pointer to the one that is furthest along from the start of the INPUTS array
+ *  - if no input meets the above criteria, return a NULL pointer
+ */
+struct Input *updateInputs(void) {
+  struct Input* lastActive = NULL;
+  int active = 0;
+  for (int i = 0; i < NUM_INPUTS; i ++) {
+    active = digitalRead(INPUTS[i].code);
+    if (active != INPUTS[i].active) {
+      lastActive = &INPUTS[i];
+      INPUTS[i].active = active;
+    }
+  }
+  return lastActive;
 }
 
 
