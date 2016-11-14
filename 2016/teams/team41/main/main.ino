@@ -25,13 +25,13 @@ struct Input {
   boolean active; // for switches, this corresponds to the "up" position. For buttons, this corresponds to the "pressed" position
 };
 
-const int NUM_INPUTS = 5;
+const int NUM_INPUTS = 4;
 static Input INPUTS[NUM_INPUTS] = {
   {PA_7, false}, // SW_1
   {PA_6, false}, // SW_2
   {PD_2, false}, // BTN_1
   {PE_0, false}, // BTN_2
-  {PF_0, false} // right (sw1)
+  // right (sw1)
 };
 struct Input *lastActive;
 
@@ -45,6 +45,11 @@ struct point {
   uint32_t y;
 };
 
+struct intPoint{
+  int x;
+  int y;
+};
+
 /*
  * Snake components
  */
@@ -54,20 +59,21 @@ struct Segment {
   struct Segment *prev; // towards tail
 };
 
-struct food{
+struct Foodm{
 
-  struct point coords;
+  intPoint coords;
   
 
 };
 
-struct food;
-food->coords.x = 50;
-food->coords.y = 12;
+Foodm food;
+
+//food.coords.x = 15;
+//food.coords.y = 15;
 struct Segment *head = NULL;
 struct Segment *tail = NULL;
 struct Segment *current = NULL;
-
+uint32_t numPoints =9;
 enum direction {
   UP,
   DOWN,
@@ -84,7 +90,7 @@ void setup() {
     pinMode(INPUTS[i].code, INPUT);
   }
 
-  uint32_t numPoints = 9;
+  
   initializeSnake((const struct point[]) {
     {11, 11}, 
     {12, 11}, 
@@ -247,17 +253,17 @@ void moveSnake() {
     case LEFT:
       tail->coords.x = head->coords.x-1;
       tail->coords.y = head->coords.y;
-      Serial.println("moving LEFT");  
+      //Serial.println("moving LEFT");  
       break;
     case RIGHT:
       tail->coords.x = head->coords.x+1;
       tail->coords.y = head->coords.y;
-      Serial.println("moving RIGHT"); 
+      //Serial.println("moving RIGHT"); 
       break;
     case UP:
       tail->coords.y = head->coords.y-1;
       tail->coords.x = head->coords.x;
-      Serial.println("moving UP");  
+      //Serial.println("moving UP");  
       break;
     case DOWN:
       tail->coords.y = head->coords.y+1;
@@ -328,44 +334,33 @@ struct Input *updateInputs(void) {
 int randNum(int n){
   int a;
   a = rand()%n;
+  Serial.print(a);
   return a;
 
 }
 
 
-
-
-
-
-
-
-
-
-
-
 void moveFood(void) {
-  struct food a;
-  struct Segment *g = *head;
+  struct Segment *g = head;
   int a[2][numPoints];
   int randx;
   
-  if (head->coords.y==food->coords.y &&head->coords.x==food->coords.x){
+  if (head->coords.y==food.coords.y &&head->coords.x==food.coords.x){
 
-    for (int i=0; i<numPoints; i++){
+    for (int i=0; i<9; i++){
 
-      numPoints[0][i]=g->coords.x;
-      numPoints[1][i]=g->coords.y;
-      g=g.prev;
+      a[0][i]=g->coords.x;
+      a[1][i]=g->coords.y;
+      g=g->prev;
 
 
     }
 
+    food.coords.x = randNum(128);
+    food.coords.y = randNum(30);
 
 
-
-
-
-}
+  }
   
 
   drawFood();
@@ -373,7 +368,7 @@ void moveFood(void) {
 
 void drawFood(){
   OrbitOledSetDrawMode(modOledSet); 
-  OrbitOledMoveTo(food->coords.x, food->coords.y);
+  OrbitOledMoveTo(food->coords.x, food.coords.y);
   OrbitOledDrawPixel();
 }
 
