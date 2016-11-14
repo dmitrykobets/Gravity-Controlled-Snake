@@ -25,13 +25,13 @@ struct Input {
   boolean active; // for switches, this corresponds to the "up" position. For buttons, this corresponds to the "pressed" position
 };
 
-const int NUM_INPUTS = 4;
+const int NUM_INPUTS = 5;
 static Input INPUTS[NUM_INPUTS] = {
   {PA_7, false}, // SW_1
   {PA_6, false}, // SW_2
   {PD_2, false}, // BTN_1
   {PE_0, false}, // BTN_2
-  // right (sw1)
+  {PF_0, false} // right (sw1)
 };
 struct Input *lastActive;
 
@@ -342,7 +342,7 @@ int randNum(int n){
 
 void moveFood(void) {
   struct Segment *g = head;
-  int a[2][numPoints];
+  int a[2][9];
   int randx;
   
   if (head->coords.y==food.coords.y &&head->coords.x==food.coords.x){
@@ -368,7 +368,7 @@ void moveFood(void) {
 
 void drawFood(){
   OrbitOledSetDrawMode(modOledSet); 
-  OrbitOledMoveTo(food->coords.x, food.coords.y);
+  OrbitOledMoveTo(food.coords.x, food.coords.y);
   OrbitOledDrawPixel();
 }
 
