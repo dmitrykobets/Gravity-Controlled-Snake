@@ -54,6 +54,16 @@ struct Segment {
   struct Segment *prev; // towards tail
 };
 
+struct food{
+
+  struct point coords;
+  
+
+};
+
+struct food;
+food->coords.x = 50;
+food->coords.y = 12;
 struct Segment *head = NULL;
 struct Segment *tail = NULL;
 struct Segment *current = NULL;
@@ -88,6 +98,7 @@ void setup() {
     }, numPoints); 
   
   drawSnake();
+  drawFood();
   OrbitOledUpdate();
 }
 
@@ -112,6 +123,7 @@ void loop() {
         break;
     }
   }
+  moveFood();
   moveSnake();
   OrbitOledUpdate();
 
@@ -312,5 +324,71 @@ struct Input *updateInputs(void) {
   }
   return lastActive;
 }
+
+int randNum(int n){
+  int a;
+  a = rand()%n;
+  return a;
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+void moveFood(void) {
+  struct food a;
+  struct Segment *g = *head;
+  int a[2][numPoints];
+  int randx;
+  
+  if (head->coords.y==food->coords.y &&head->coords.x==food->coords.x){
+
+    for (int i=0; i<numPoints; i++){
+
+      numPoints[0][i]=g->coords.x;
+      numPoints[1][i]=g->coords.y;
+      g=g.prev;
+
+
+    }
+
+
+
+
+
+
+}
+  
+
+  drawFood();
+}
+
+void drawFood(){
+  OrbitOledSetDrawMode(modOledSet); 
+  OrbitOledMoveTo(food->coords.x, food->coords.y);
+  OrbitOledDrawPixel();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
