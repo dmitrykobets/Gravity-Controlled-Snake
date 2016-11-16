@@ -82,14 +82,13 @@ enum direction {
 } direction;
 
 void setup() {
-
   Serial.begin(9600);
 
   initializeOLED();
+
   for (int i = 0; i < NUM_INPUTS; i ++) {
     pinMode(INPUTS[i].code, INPUT);
   }
-
   
   initializeSnake((const struct point[]) {
     {11, 11}, 
@@ -109,7 +108,6 @@ void setup() {
 }
 
 void loop() {
-
   lastActive = updateInputs();
   if (lastActive) {
     switch(lastActive->code) {
@@ -134,92 +132,10 @@ void loop() {
   OrbitOledUpdate();
 
   DelayMs(1000/FPS);
-/*
-if (alive) {
-
-  OrbitOledMoveTo(tail->x, tail->y);
-  OrbitOledSetDrawMode(modOledXor);
-  OrbitOledDrawPixel();
-  Serial.println("erasing");
-  Serial.print(tail->x,DEC);
-  Serial.print(" ");
-  Serial.println(tail->y,DEC);
-  
-  if (thing == LEFT) {
-    tail->x = head->x - 1;
-    tail->y = head->y;
-  }
-  else if (thing == RIGHT) {
-    tail->x = head->x + 1;
-    tail->y = head->y;
-  }
-  else if(thing == DOWN) {
-    tail->y = head->y + 1;
-    tail->x = head->x;
-  }
-  else if (thing == UP) {
-    tail->y = head->y - 1;
-    tail->x = head->x;
-  }
-
-  Serial.println("moving");
-  Serial.print(head->x, DEC);
-  Serial.print(" ");
-  Serial.print(head->y, DEC);
-  Serial.print(" -- ");
-  Serial.print(tail->x, DEC);
-  Serial.print(" ");
-  Serial.println(tail->y, DEC);
-
-
-  Serial.println("swapping");
-  Serial.print(head->x, DEC);
-  Serial.print(" ");
-  Serial.print(head->y, DEC);
-  Serial.print(" -- ");
-  Serial.print(tail->x, DEC);
-  Serial.print(" ");
-  Serial.println(tail->y, DEC);
-
-  if (tail == NULL) {
-
-    Serial.println("tail is null");
-  }
-
-  OrbitOledMoveTo(head->x, head->y);
-  if (OrbitOledGetPixel()) {
-    alive = false;
-  } else {
-    OrbitOledSetDrawMode(modOledSet);
-    OrbitOledDrawPixel();
-    OrbitOledUpdate();
-  }
-} else if (!done) {
-  done = true;
-  OrbitOledClear();
-  OrbitOledMoveTo(0, 0);
-OrbitOledDrawString("You Died");
-  OrbitOledUpdate();
-}
-  // BTN_1
-  if (digitalRead(PD_2)) {
-    thing = DOWN;
-  }
-  else if (digitalRead(PF_0)) {
-    thing = UP;
-  }
-  else if (!digitalRead(PA_6)) {
-    thing = LEFT;
-  } else {
-    thing = RIGHT;
-  }*/
 }
 
 /*
- * Create a new node and set it as the new head of the linked list
- * 
- * struct Segment* head -- the head of the linked list
- * uint32_t x, y -- the coordinates of the new head
+ * Create a new node and set it as the new head of the snake's linked list 
  */
 void appendToHead(const struct point *coords) {
   struct Segment* newHead = (struct Segment*)malloc(sizeof(struct Segment));
@@ -238,7 +154,7 @@ void appendToHead(const struct point *coords) {
 }
 
 /*
- * Create a linked list based off an array of coordinates and return the head
+ * Create a linked list based off a list of coordinates
  */
 void initializeSnake(const struct point coords[], uint32_t numCoords) {
   for (int i = 0; i < numCoords; i ++) {
@@ -271,7 +187,8 @@ void moveSnake() {
       Serial.println("moving DOWN");  
       break;
   }
-
+  
+  // make the tail the new head of the snake
   current = tail;
   tail->prev = head;
   current = tail;
@@ -311,7 +228,6 @@ void initializeOLED(void) {
   OrbitOledSetFillPattern(OrbitOledGetStdPattern(iptnSolid));
 }
 
-
 /*
  * Reads and updates all of the input states
  * Returns a pointer to the input which has just had its active state flipped to "true"
@@ -347,7 +263,7 @@ void moveFood(void) {
   
   if (head->coords.y==food.coords.y &&head->coords.x==food.coords.x){
 
-    for (int i=0; i<9; i++){
+    for (int i=0; i<9; i++){  
 
       a[0][i]=g->coords.x;
       a[1][i]=g->coords.y;
@@ -371,19 +287,5 @@ void drawFood(){
   OrbitOledMoveTo(food.coords.x, food.coords.y);
   OrbitOledDrawPixel();
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
