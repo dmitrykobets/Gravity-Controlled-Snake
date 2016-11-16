@@ -1,4 +1,3 @@
-#include <delay.h>
 #include <FillPat.h>
 #include <LaunchPad.h>
 #include <OrbitBoosterPackDefs.h>
@@ -515,5 +514,3 @@ void drawFood(){
   OrbitOledMoveTo(food.x, food.y);
   OrbitOledDrawPixel();
 }
-
-
