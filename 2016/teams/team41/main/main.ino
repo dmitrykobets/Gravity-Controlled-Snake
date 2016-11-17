@@ -38,9 +38,6 @@ int genRandNum(int n);
 boolean intersectsWithSnake(struct Segment *head, struct point* point);
 boolean pointsIntersect(struct point* point1, struct point* point2);
 
-
-
-
 /*
  * Input
  */
@@ -52,14 +49,13 @@ struct Input {
 const int NUM_INPUTS = 4;
 static Input INPUTS[NUM_INPUTS] = {
   {PF_0, false}, // SW_1
-  {PF_4, false}, // SW_2
+  {PA_6, false}, // SW_2
   {PD_2, false}, // BTN_1
   {PE_0, false}, // BTN_2
 
 };
 
 int FPS = 10;
-int active=0;
 struct Input *lastUpdatedInput;
 
 /*
@@ -110,25 +106,6 @@ enum direction {
 
 void setup() {
 
-  SysCtlClockSet(SYSCTL_SYSDIV_2_5| SYSCTL_USE_PLL | SYSCTL_OSC_INT | SYSCTL_XTAL_16MHZ);
-
-  // Pin F4 setup
-  SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);        // Enable port F
-  GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_4);  // Init PF4 as input
-  GPIOPadConfigSet(GPIO_PORTF_BASE, GPIO_PIN_4,
-      GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);  // Enable weak pullup resistor for PF4
-
-  // Interrupt setuü
-  GPIOIntDisable(GPIO_PORTF_BASE, GPIO_PIN_4);        // Disable interrupt for PF4 (in case it was enabled)
-  GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_4);      // Clear pending interrupts for PF4
-  GPIOIntRegister(GPIO_PORTF_BASE, onButtonDown);     // Register our handler function for port F
-  GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_4,
-      GPIO_FALLING_EDGE);             // Configure PF4 for falling edge trigger
-  GPIOIntEnable(GPIO_PORTF_BASE, GPIO_PIN_4);     // Enable interrupt for PF4
-
-  while(1);
-
-
   Serial.begin(9600);
   direction = RIGHT;
 
@@ -139,14 +116,15 @@ void setup() {
   }
   
   initializeSnake(points, NUM_POINTS); 
-  
 
   drawSnake();
   drawFood();
   OrbitOledUpdate();
+	
 }
 
 void loop() {
+	
   lastUpdatedInput = updateInputs();
   if (lastUpdatedInput) {
     switch(lastUpdatedInput->code) {
@@ -158,21 +136,11 @@ void loop() {
         if (lastUpdatedInput->active && direction != DOWN)
           direction = UP;
         break;
-      case PF_0: //SW_2
+      case PA_6: //SW_2
         if (lastUpdatedInput->active && direction != LEFT)
           direction = RIGHT;
        break;
-      // case PA_7:
-      //  if (lastUpdatedInput->active)
-      //     direction = LEFT;
-      case PF_4:
-        if (direction!=RIGHT)
-          direction = LEFT;
-
-        //else
-          //direction = LEFT;
-        break;
-    }
+		}
   } 
   moveSnake();
   
@@ -180,20 +148,6 @@ void loop() {
   
   DelayMs(1000/FPS);
 }
-
-void onButtonDown(void) {
-    if (GPIOIntStatus(GPIO_PORTF_BASE, false) & GPIO_PIN_4) {
-        // PF4 was interrupt cause
-        printf("Button Down\n");
-        active = 1;
-        //GPIOIntRegister(GPIO_PORTF_BASE, onButtonUp);   // Register our handler function for port F
-        GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_4,
-            GPIO_RISING_EDGE);          // Configure PF4 for rising edge trigger
-        GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_4);  // Clear interrupt flag
-    }
-}
-
-
 
 void appendToHead(int x, int y) {
   struct point newPoint = {x, y};
@@ -321,13 +275,13 @@ void initializeOLED(void) {
 
 /*
  * Reads and updates all of the input states
- * Returns a pointer to the input which has just had its active changed
+ * Returns a pointer to the input which has just had its state changed
  *  - if more than one input meets the above criteria, return a pointer to the one that is furthest along from the start of the INPUTS array
  *  - if no input meets the above criteria, return a NULL pointer
  */
 struct Input *updateInputs(void) {
   struct Input* lastUpdatedInput = NULL;
-  active = 0;
+  int active = 0;
   for (int i = 0; i < NUM_INPUTS; i ++) {
     active = digitalRead(INPUTS[i].code);
 
@@ -351,7 +305,7 @@ boolean intersectsWithSnake(struct Segment *head, struct point* point) {
     if (pointsIntersect(point, &(head->coords))) {
       return true;
     }
-    head = head->next;
+    head = head->prev;
   }
   return false;
 }
