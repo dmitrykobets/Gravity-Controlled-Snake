@@ -169,10 +169,10 @@ void loop() {
         if (lastUpdatedInput->active && direction != LEFT)
           direction = RIGHT;
         break;
-      case PF_2:
-        if (direction != RIGHT)
-          direction = LEFT;
-        break;
+      // case PF_2:
+      //   if (direction != RIGHT)
+      //     direction = LEFT;
+      //   break;
     }
   } 
   moveSnake();
