@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 /*
+*
 TODO:
 fix global variables vs local variables created in each loop() call... for example: lastUpdatedInput.
 coords are being copied around instead of being kept as pointers
@@ -201,7 +202,7 @@ void moveSnake() {
 				appendToHead(head->coords.x, head->coords.y+1);
 				break;
 		}
-  // To move the snake, the tail node has its coordinates moved ahead of the head (in some direction) and becomes the new head. The node that was previously ahead of the tail
+ // To move the snake, the tail node has its coordinates moved ahead of the head (in some direction) and becomes the new head. The node that was previously ahead of the tail
   // becomes the new tail.
 	} else {
 		switch(direction) {
