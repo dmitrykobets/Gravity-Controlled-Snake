@@ -13,7 +13,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
-
+/*
+TODO:
+fix global variables vs local variables created in each loop() call... for example: lastUpdatedInput.
+*/
 
 
 void initializeOLED(void);
@@ -46,25 +49,16 @@ static Input INPUTS[NUM_INPUTS] = {
 
 };
 
-
-
 uint32_t FPS = 10;
 
-
-struct Input *lastActive;
+struct Input *lastUpdatedInput;
 
 /*
  * Game control constants
  */
-
 struct point {
   uint32_t x;
   uint32_t y;
-};
-
-struct intPoint{
-  int x;
-  int y;
 };
 
 /*
@@ -75,21 +69,28 @@ struct Segment {
   struct Segment *next; // towards head
   struct Segment *prev; // towards tail
 };
+const uint32_t NUM_POINTS =9;
+uint32_t points[NUM_POINTS] = {
+		{11, 11}, 
+    {12, 11}, 
+    {13, 11}, 
+    {14, 11}, 
+    {15, 11}, 
+    {16, 11}, 
+    {17, 11}, 
+    {18, 11}, 
+    {19, 11}};
 
-int genRandYesNo=0;
-const int upperLimitX=128;
-const int lowerLimitX=0;
-const int lowerLimitY=0;
-const int upperLimitY=30;
+const int X_BOUND_LEFT=0;
+const int X_BOUND_RIGHT=128;
+const int Y_BOUND_TOP=0;
+const int Y_BOUND_BOTTOM=30;
 
 
 struct Segment *head = NULL;
 struct Segment *tail = NULL;
 struct Segment *current = NULL;
 
-point food={100,15};
-
-uint32_t numPoints =9;
 enum direction {
   UP,
   DOWN,
@@ -97,15 +98,8 @@ enum direction {
   RIGHT
 } direction;
 
-struct directions{
-  enum direction prev;
-  enum direction current;
-};
-
-
 void setup() {
   Serial.begin(9600);
-  point food={100,15};
   direction = RIGHT;
 
   initializeOLED();
@@ -114,17 +108,7 @@ void setup() {
     pinMode(INPUTS[i].code, INPUT);
   }
   
-  initializeSnake((const struct point[]) {
-    {11, 11}, 
-    {12, 11}, 
-    {13, 11}, 
-    {14, 11}, 
-    {15, 11}, 
-    {16, 11}, 
-    {17, 11}, 
-    {18, 11}, 
-    {19, 11}
-    }, numPoints); 
+  initializeSnake(points, NUM_POINTS); 
   
 
   drawSnake();
@@ -133,23 +117,23 @@ void setup() {
 }
 
 void loop() {
-  lastActive = updateInputs();
-  if (lastActive) {
-    switch(lastActive->code) {
+  lastUpdatedInput = updateInputs();
+  if (lastUpdatedInput) {
+    switch(lastUpdatedInput->code) {
       case PD_2: //BTN_1
-        if (lastActive->active&&direction!=UP)
+        if (lastUpdatedInput->active && direction != UP)
           direction = DOWN;
         break;
       case PE_0: //BTN_2
-        if (lastActive->active&&direction!=DOWN)
+        if (lastUpdatedInput->active && direction != DOWN)
           direction = UP;
         break;
       case PF_0: //SW_2
-        if (lastActive->active&&direction!=LEFT)
+        if (lastUpdatedInput->active && direction != LEFT)
           direction = RIGHT;
        break;
       // case PA_7:
-      //  if (lastActive->active)
+      //  if (lastUpdatedInput->active)
       //     direction = LEFT;
       case PE_3:
         if (direction!=RIGHT)
@@ -165,16 +149,12 @@ void loop() {
   moveFood();
   OrbitOledUpdate();
   
- 
   DelayMs(1000/FPS);
 }
 
 /*
  * Create a new node and set it as the new head of the snake's linked list 
  */
-
-
-
 void directionAction(struct Segment *previous, struct Segment *next){
   switch(direction) {
         
@@ -203,10 +183,6 @@ void directionAction(struct Segment *previous, struct Segment *next){
         //Serial.println("moving DOWN");  
         break;
     }
-
-
-
-
 }
 
 void appendToHead(const struct point *coords) {
@@ -214,8 +190,6 @@ void appendToHead(const struct point *coords) {
   newHead->coords = *coords;
   
   newHead->next = NULL;
-  
-  
   newHead->prev = head;
   
   if (head) {
@@ -241,27 +215,25 @@ void initializeSnake(const struct point coords[], uint32_t numCoords) {
 void moveSnake() {
 
   eraseTail();
-        current = head->prev->prev;
+	current = head->prev->prev;
 
   while (current) {
-      if (current->coords.x ==head->coords.x &&current->coords.y ==head->coords.y){
+      if (current->coords.x == head->coords.x && current->coords.y == head->coords.y){
         OrbitOledClear();
-          OrbitOledSetCursor(0,0);
+				OrbitOledSetCursor(0,0);
 
-
-          OrbitOledPutString("You Died");
-          
-          OrbitOledUpdate();
-          delay(3000);
-          OrbitOledClear();
-          head=NULL;
-          tail = NULL;
-          current = NULL;
-          food = {100, 15};
-          genRandYesNo=0;
-          numPoints = 9;
-          direction = RIGHT;
-          initializeOLED();
+				OrbitOledPutString("You Died");
+				
+				OrbitOledUpdate();
+				delay(3000);
+				OrbitOledClear();
+				head=NULL;
+				tail = NULL;
+				current = NULL;
+				food = {100, 15};
+				numPoints = 9;
+				direction = RIGHT;
+				initializeOLED();
 
           initializeSnake((const struct point[]) {
       {11, 11}, 
@@ -305,23 +277,11 @@ void moveSnake() {
           tail = NULL;
           current = NULL;
           food = {100, 15};
-          genRandYesNo=0;
           numPoints = 9;
           direction = RIGHT;
           initializeOLED();
 
-          initializeSnake((const struct point[]) {
-      {11, 11}, 
-      {12, 11}, 
-      {13, 11}, 
-      {14, 11}, 
-      {15, 11}, 
-      {16, 11}, 
-      {17, 11}, 
-      {18, 11}, 
-      {19, 11}
-      }, numPoints); 
-    
+   				initializeSnake(points, NUM_POINTS); 
 
     drawSnake();
     drawFood();
@@ -360,7 +320,6 @@ void moveSnake() {
         break;
     }
       if (tail->coords.y==food.y &&tail->coords.x==food.x){
-        genRandYesNo=1;
         
         current = tail;
 
@@ -422,9 +381,7 @@ void drawSnake(void) {
     OrbitOledMoveTo(current->coords.x, current->coords.y);
     OrbitOledDrawPixel();
     current = current->prev;
-    
   }
-
 }
 
 void eraseTail(void) {
@@ -436,7 +393,6 @@ void eraseFood(void){
   OrbitOledSetDrawMode(modOledXor); 
   OrbitOledMoveTo(food.x, food.y);
   OrbitOledDrawPixel();
-
 }
 void drawHead(void) {
   OrbitOledSetDrawMode(modOledSet); 
@@ -453,58 +409,59 @@ void initializeOLED(void) {
 
 /*
  * Reads and updates all of the input states
- * Returns a pointer to the input which has just had its active state flipped to "true"
+ * Returns a pointer to the input which has just had its active changed
  *  - if more than one input meets the above criteria, return a pointer to the one that is furthest along from the start of the INPUTS array
  *  - if no input meets the above criteria, return a NULL pointer
  */
 struct Input *updateInputs(void) {
-  struct Input* lastActive = NULL;
+  struct Input* lastUpdatedInput = NULL;
   int active = 0;
   for (int i = 0; i < NUM_INPUTS; i ++) {
     active = digitalRead(INPUTS[i].code);
     if (active != INPUTS[i].active) {
-      lastActive = &INPUTS[i];
+      lastUpdatedInput = &INPUTS[i];
       INPUTS[i].active = active;
     }
   }
-  return lastActive;
+  return lastUpdatedInput;
 }
 
-int randNum(int n){
-  int a;
-  a = rand()%n;
-  
-  return a;
+/*
+* Generates a random number between 0 and @n inclusive
+*/
+int genRandNum(int n){
+  return rand()%(n+1);
+}
 
- }
+boolean intersectsWithSnake(struct point* point) {
+	current = head;
+	while (current) {
+		if (pointsIntersect(point, &(current->coords)) {
+			return true;
+		}
+	}
+	return false;
+}
 
+/*
+* Return true if two points have identical x and y components; Otherwise, return false
+*/
+boolean pointsIntersect(struct point* point1, struct point* point2) {
+	return point1->x == point2->x && point1->y == point2->y;
+}
 
-void moveFood(void) {
+/*
+* Erase the current food item. Generate a new one in a random location on the screen.
+*/
+void generateFood(void) {
 
   eraseFood();
-  if (genRandYesNo){
-  current = head;
-  food.x = randNum(128);
-    food.y = randNum(32);
-    
-    while (current) {
-      if (current->coords.x ==food.x &&current->coords.y ==food.y){
-        food.x = randNum(128);
-        food.y = randNum(32);
-        current =head;
-      }
-      else{
-        current = current->prev;
-      }
-      
 
-    }
-    
-    
-
-    genRandYesNo=0;
-  }
-  
+	// make sure the food does not spawn within the snake
+	do {
+		food.x = randNum(128);
+		food.y = randNum(32);
+	} while (intersectWithSnake(food));
 
   drawFood();
 }
