@@ -46,15 +46,16 @@ struct Input {
   boolean active; // for switches, this corresponds to the "up" position. For buttons, this corresponds to the "pressed" position
 };
 
-const int NUM_INPUTS = 4;
+const int NUM_INPUTS = 3;
 static Input INPUTS[NUM_INPUTS] = {
   {PF_0, false}, // SW_1
-  {PA_6, false}, // SW_2
+  //{PF_4, false},
+   // SW_2
   {PD_2, false}, // BTN_1
   {PE_0, false}, // BTN_2
 
 };
-
+int active;
 int FPS = 10;
 struct Input *lastUpdatedInput;
 
@@ -104,9 +105,37 @@ enum direction {
   RIGHT
 } direction;
 
+void onButtonDown(void) {
+    if (GPIOIntStatus(GPIO_PORTF_BASE, false) & GPIO_PIN_4) {
+        // PF4 was interrupt cause
+        Serial.println("Button Down\n");
+        if (direction!=RIGHT){
+        direction = LEFT;
+        }
+        // active = 1;
+        //GPIOIntRegister(GPIO_PORTF_BASE, onButtonUp);   // Register our handler function for port F
+        GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_4,
+            GPIO_RISING_EDGE);          // Configure PF4 for rising edge trigger
+        GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_4);  // Clear interrupt flag
+    }
+}
+
+
 void setup() {
 
   Serial.begin(9600);
+  // SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);        // Enable port F
+  GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_4);  // Init PF4 as input
+  GPIOPadConfigSet(GPIO_PORTF_BASE, GPIO_PIN_4,
+      GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);  // Enable weak pullup resistor for PF4
+
+  // Interrupt setuü
+  GPIOIntDisable(GPIO_PORTF_BASE, GPIO_PIN_4);        // Disable interrupt for PF4 (in case it was enabled)
+  GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_4);      // Clear pending interrupts for PF4
+  GPIOIntRegister(GPIO_PORTF_BASE, onButtonDown);     // Register our handler function for port F
+  GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_4,
+      GPIO_FALLING_EDGE);             // Configure PF4 for falling edge trigger
+  GPIOIntEnable(GPIO_PORTF_BASE, GPIO_PIN_4);     // Enable interrupt for PF4
   direction = RIGHT;
 
   initializeOLED();
@@ -140,7 +169,7 @@ void loop() {
         if (lastUpdatedInput->active && direction != LEFT)
           direction = RIGHT;
         break;
-      case PA_6:
+      case PF_2:
         if (direction != RIGHT)
           direction = LEFT;
         break;
@@ -298,9 +327,10 @@ void initializeOLED(void) {
  */
 struct Input *updateInputs(void) {
   struct Input* lastUpdatedInput = NULL;
-  int active = 0;
+  active = 0;
   for (int i = 0; i < NUM_INPUTS; i ++) {
     active = digitalRead(INPUTS[i].code);
+
 
     if (active != INPUTS[i].active) {
       lastUpdatedInput = &INPUTS[i];
