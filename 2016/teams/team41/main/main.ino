@@ -5,6 +5,7 @@
 #include <OrbitOledChar.h>
 #include <OrbitOledGrph.h>
 #include <string.h>
+#include <delay.h>
 #include "inc/hw_memmap.h"
 #include "inc/hw_types.h"
 #include "driverlib/gpio.h"
@@ -14,7 +15,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 /*
-*
 TODO:
 fix global variables vs local variables created in each loop() call... for example: lastUpdatedInput.
 coords are being copied around instead of being kept as pointers
@@ -27,19 +27,22 @@ void initializeOLED(void);
 struct Input *updateInputs(void); 
 
 void appendToHead(const struct point*);
-void initializeSnake(const struct point[], uint32_t);
+void appendToHead(int,int);
+void initializeSnake(struct point[], int);
 
 void drawSnake(void);
 void eraseTail(void);
 void drawHead(void);
 
-char* output = "You Died. Your score was: ";
+int genRandNum(int n);
+boolean intersectsWithSnake(struct Segment *head, struct point* point);
+boolean pointsIntersect(struct point* point1, struct point* point2);
 
 /*
  * Input
  */
 struct Input {
-  const uint32_t code;
+  const int code;
   boolean active; // for switches, this corresponds to the "up" position. For buttons, this corresponds to the "pressed" position
 };
 
@@ -52,7 +55,7 @@ static Input INPUTS[NUM_INPUTS] = {
 
 };
 
-uint32_t FPS = 10;
+int FPS = 10;
 
 struct Input *lastUpdatedInput;
 
@@ -60,9 +63,9 @@ struct Input *lastUpdatedInput;
  * Game control constants
  */
 struct point {
-  uint32_t x;
-  uint32_t y;
-};
+  int x;
+  int y;
+} food;
 
 /*
  * Snake components
@@ -72,9 +75,9 @@ struct Segment {
   struct Segment *next; // towards head
   struct Segment *prev; // towards tail
 };
-const uint32_t NUM_POINTS =9;
-uint32_t points[NUM_POINTS] = {
-		{11, 11}, 
+const int NUM_POINTS =9;
+struct point points[NUM_POINTS] = {
+    {11, 11}, 
     {12, 11}, 
     {13, 11}, 
     {14, 11}, 
@@ -149,11 +152,15 @@ void loop() {
     }
   } 
   moveSnake();
-
-  moveFood();
+  
   OrbitOledUpdate();
   
   DelayMs(1000/FPS);
+}
+
+void appendToHead(int x, int y) {
+  struct point newPoint = {x, y};
+  appendToHead(&newPoint);
 }
 
 void appendToHead(const struct point *coords) {
@@ -175,7 +182,7 @@ void appendToHead(const struct point *coords) {
 /*
  * Create a linked list based off a list of coordinates
  */
-void initializeSnake(const struct point coords[], uint32_t numCoords) {
+void initializeSnake(struct point coords[], int numCoords) {
   for (int i = 0; i < numCoords; i ++) {
     appendToHead(&coords[i]);
   }
@@ -187,49 +194,49 @@ void moveSnake() {
 
   eraseTail();
 
-	if (isGrowing) {
-		switch(direction) {
-			case LEFT:
-				appendToHead(head->coords.x-1, head->coords.y);
-				break;
-			case RIGHT:
-				appendToHead(head->coords.x+1, head->coords.y);
-				break;
-			case UP:
-				appendToHead(head->coords.x, head->coords.y-1);
-				break;
-			case DOWN:
-				appendToHead(head->coords.x, head->coords.y+1);
-				break;
-		}
+  if (isGrowing) {
+    switch(direction) {
+      case LEFT:
+        appendToHead(head->coords.x-1, head->coords.y);
+        break;
+      case RIGHT:
+        appendToHead(head->coords.x+1, head->coords.y);
+        break;
+      case UP:
+        appendToHead(head->coords.x, head->coords.y-1);
+        break;
+      case DOWN:
+        appendToHead(head->coords.x, head->coords.y+1);
+        break;
+    }
  // To move the snake, the tail node has its coordinates moved ahead of the head (in some direction) and becomes the new head. The node that was previously ahead of the tail
   // becomes the new tail.
-	} else {
-		switch(direction) {
-			case LEFT:
-				tail->coords.x = head->coords.x-1;
-				tail->coords.y = head->coords.y;
-				break;
-			case RIGHT:
-				tail->coords.x = head->coords.x+1;
-				tail->coords.y = head->coords.y;
-				break;
-			case UP:
-				tail->coords.y = head->coords.y-1;
-				tail->coords.x = head->coords.x;
-				break;
-			case DOWN:
-				tail->coords.y = head->coords.y+1;
-				tail->coords.x = head->coords.x;
-				break;
-		}
-	}
-	if (pointsIntersect(&(head->coords), &food)) {
-		generateFood();
-		isGrowing = true;
+  } else {
+    switch(direction) {
+      case LEFT:
+        tail->coords.x = head->coords.x-1;
+        tail->coords.y = head->coords.y;
+        break;
+      case RIGHT:
+        tail->coords.x = head->coords.x+1;
+        tail->coords.y = head->coords.y;
+        break;
+      case UP:
+        tail->coords.y = head->coords.y-1;
+        tail->coords.x = head->coords.x;
+        break;
+      case DOWN:
+        tail->coords.y = head->coords.y+1;
+        tail->coords.x = head->coords.x;
+        break;
+    }
+  }
+  if (pointsIntersect(&(head->coords), &food)) {
+    generateFood();
+    isGrowing = true;
   }
 
-	// swap the head node with the tail node
+  // swap the head node with the tail node
   current = tail;
   tail->prev = head;
   current = tail;
@@ -238,11 +245,11 @@ void moveSnake() {
   head->next = current;
   head = current;
 
-	// the snake can never intersect with its first three segments
-	if (intersectsWithSnake(head->prev->prev->prev, head->coords)) {
-		OrbitOledMoveTo(0, 0);
-		OrbitOledDrawString("You died!");
-	} 
+  // the snake can never intersect with its first three segments
+  if (intersectsWithSnake(head->prev->prev->prev, &(head->coords))) {
+    OrbitOledMoveTo(0, 0);
+    OrbitOledDrawString("You died!");
+  } 
 
   drawHead();
 }
@@ -302,31 +309,31 @@ int genRandNum(int n){
 }
 
 boolean intersectsWithSnake(struct Segment *head, struct point* point) {
-	while (head) {
-		if (pointsIntersect(point, &(head->coords))) {
-			return true;
-		}
-		head = head->next;
-	}
-	return false;
+  while (head) {
+    if (pointsIntersect(point, &(head->coords))) {
+      return true;
+    }
+    head = head->next;
+  }
+  return false;
 }
 
 /*
 * Return true if two points have identical x and y components; Otherwise, return false
 */
 boolean pointsIntersect(struct point* point1, struct point* point2) {
-	return point1->x == point2->x && point1->y == point2->y;
+  return point1->x == point2->x && point1->y == point2->y;
 }
 
 /*
 * Generate a new one in a random location on the screen.
 */
 void generateFood(void) {
-	// make sure the food does not spawn within the snake
-	do {
-		food.x = randNum(128);
-		food.y = randNum(32);
-	} while (intersectWithSnake(food));
+  // make sure the food does not spawn within the snake
+  do {
+    food.x = genRandNum(128);
+    food.y = genRandNum(32);
+  } while (intersectsWithSnake(head, &food));
 
   drawFood();
 }
@@ -341,3 +348,4 @@ void drawFood(){
   OrbitOledMoveTo(food.x, food.y);
   OrbitOledDrawPixel();
 }
+
