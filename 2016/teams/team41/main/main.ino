@@ -16,6 +16,8 @@
 /*
 TODO:
 fix global variables vs local variables created in each loop() call... for example: lastUpdatedInput.
+coords are being copied around instead of being kept as pointers
+prevent food from spawning directly in front of the snake (or maybe even within a range around its head, and also its tail)
 */
 
 
@@ -81,15 +83,16 @@ uint32_t points[NUM_POINTS] = {
     {18, 11}, 
     {19, 11}};
 
+struct Segment *head = NULL;
+struct Segment *tail = NULL;
+struct Segment *current = NULL;
+
+boolean isGrowing = false;
+
 const int X_BOUND_LEFT=0;
 const int X_BOUND_RIGHT=128;
 const int Y_BOUND_TOP=0;
 const int Y_BOUND_BOTTOM=30;
-
-
-struct Segment *head = NULL;
-struct Segment *tail = NULL;
-struct Segment *current = NULL;
 
 enum direction {
   UP,
@@ -152,39 +155,6 @@ void loop() {
   DelayMs(1000/FPS);
 }
 
-/*
- * Create a new node and set it as the new head of the snake's linked list 
- */
-void directionAction(struct Segment *previous, struct Segment *next){
-  switch(direction) {
-        
-      case LEFT:
-        next->coords.x = head->coords.x-1;
-        tail->coords.y = head->coords.y;
-        
-        //Serial.println("moving LEFT");  
-        break;
-      case RIGHT:
-        tail->coords.x = head->coords.x+1;
-        tail->coords.y = head->coords.y;
-        
-        //Serial.println("moving RIGHT"); 
-        break;
-      case UP:
-        tail->coords.y = head->coords.y-1;
-        tail->coords.x = head->coords.x;
-        
-        //Serial.println("moving UP");  
-        break;
-      case DOWN:
-        tail->coords.y = head->coords.y+1;
-        tail->coords.x = head->coords.x;
-        
-        //Serial.println("moving DOWN");  
-        break;
-    }
-}
-
 void appendToHead(const struct point *coords) {
   struct Segment* newHead = (struct Segment*)malloc(sizeof(struct Segment));
   newHead->coords = *coords;
@@ -201,8 +171,6 @@ void appendToHead(const struct point *coords) {
   head = newHead;
 }
 
-
-
 /*
  * Create a linked list based off a list of coordinates
  */
@@ -212,156 +180,55 @@ void initializeSnake(const struct point coords[], uint32_t numCoords) {
   }
 }
 
+/*
+*/
 void moveSnake() {
 
   eraseTail();
-	current = head->prev->prev;
 
-  while (current) {
-      if (current->coords.x == head->coords.x && current->coords.y == head->coords.y){
-        OrbitOledClear();
-				OrbitOledSetCursor(0,0);
-
-				OrbitOledPutString("You Died");
-				
-				OrbitOledUpdate();
-				delay(3000);
-				OrbitOledClear();
-				head=NULL;
-				tail = NULL;
-				current = NULL;
-				food = {100, 15};
-				numPoints = 9;
-				direction = RIGHT;
-				initializeOLED();
-
-          initializeSnake((const struct point[]) {
-      {11, 11}, 
-      {12, 11}, 
-      {13, 11}, 
-      {14, 11}, 
-      {15, 11}, 
-      {16, 11}, 
-      {17, 11}, 
-      {18, 11}, 
-      {19, 11}
-      }, numPoints); 
-    
-
-    drawSnake();
-    drawFood();
-    OrbitOledUpdate();
-      } 
-      if (current->coords.x == food.x&& current->coords.y==food.y){
-        OrbitOledSetDrawMode(modOledSet); 
-        OrbitOledMoveTo(current->coords.x, current->coords.y);
-        OrbitOledDrawPixel();
-      }
-      current = current->prev;
-    
-  }
-  
-  // make the tail the new head of the snake
-
-  if (head->coords.x>upperLimitX||head->coords.y>upperLimitY){
-          OrbitOledClear();
-          OrbitOledSetCursor(0,0);
-          output = (char*)malloc(strlen(output)+1);
-          sprintf(output, "%d", numPoints-9);
-          OrbitOledPutString(output);
-          
-          OrbitOledUpdate();
-          delay(3000);
-          OrbitOledClear();
-          head=NULL;
-          tail = NULL;
-          current = NULL;
-          food = {100, 15};
-          numPoints = 9;
-          direction = RIGHT;
-          initializeOLED();
-
-   				initializeSnake(points, NUM_POINTS); 
-
-    drawSnake();
-    drawFood();
-    OrbitOledUpdate();
-
-
-    }
-    else
-    {
-
-    switch(direction) {
-      
-      case LEFT:
-        tail->coords.x = head->coords.x-1;
-        tail->coords.y = head->coords.y;
-        
-        //Serial.println("moving LEFT");  
-        break;
-      case RIGHT:
-        tail->coords.x = head->coords.x+1;
-        tail->coords.y = head->coords.y;
-        
-        //Serial.println("moving RIGHT"); 
-        break;
-      case UP:
-        tail->coords.y = head->coords.y-1;
-        tail->coords.x = head->coords.x;
-        
-        //Serial.println("moving UP");  
-        break;
-      case DOWN:
-        tail->coords.y = head->coords.y+1;
-        tail->coords.x = head->coords.x;
-        
-        //Serial.println("moving DOWN");  
-        break;
-    }
-      if (tail->coords.y==food.y &&tail->coords.x==food.x){
-        
-        current = tail;
-
-        switch(direction) {
-      
-      case LEFT:
-        current->coords.x = tail->coords.x-1;
-        current->coords.y = tail->coords.y;
-        
-        //Serial.println("moving LEFT");  
-        break;
-      case RIGHT:
-        current->coords.x = tail->coords.x+1;
-        current->coords.y = tail->coords.y;
-        
-        //Serial.println("moving RIGHT"); 
-        break;
-      case UP:
-        current->coords.y = tail->coords.y-1;
-        current->coords.x = tail->coords.x;
-        
-        //Serial.println("moving UP");  
-        break;
-      case DOWN:
-        current->coords.y = tail->coords.y+1;
-        current->coords.x = tail->coords.x;
-        
-        //Serial.println("moving DOWN");  
-        break;
-    }
-          appendToHead(&(tail->coords));
-          numPoints++;
-      }
-    
-
-      
-
-
-
-
+	if (isGrowing) {
+		switch(direction) {
+			case LEFT:
+				appendToHead(head->coords.x-1, head->coords.y);
+				break;
+			case RIGHT:
+				appendToHead(head->coords.x+1, head->coords.y);
+				break;
+			case UP:
+				appendToHead(head->coords.x, head->coords.y-1);
+				break;
+			case DOWN:
+				appendToHead(head->coords.x, head->coords.y+1);
+				break;
+		}
+  // To move the snake, the tail node has its coordinates moved ahead of the head (in some direction) and becomes the new head. The node that was previously ahead of the tail
+  // becomes the new tail.
+	} else {
+		switch(direction) {
+			case LEFT:
+				tail->coords.x = head->coords.x-1;
+				tail->coords.y = head->coords.y;
+				break;
+			case RIGHT:
+				tail->coords.x = head->coords.x+1;
+				tail->coords.y = head->coords.y;
+				break;
+			case UP:
+				tail->coords.y = head->coords.y-1;
+				tail->coords.x = head->coords.x;
+				break;
+			case DOWN:
+				tail->coords.y = head->coords.y+1;
+				tail->coords.x = head->coords.x;
+				break;
+		}
+	}
+	if (pointsIntersect(&(head->coords), &food)) {
+		generateFood();
+		isGrowing = true;
   }
 
+	// swap the head node with the tail node
   current = tail;
   tail->prev = head;
   current = tail;
@@ -370,13 +237,18 @@ void moveSnake() {
   head->next = current;
   head = current;
 
+	// the snake can never intersect with its first three segments
+	if (intersectsWithSnake(head->prev->prev->prev, head->coords)) {
+		OrbitOledMoveTo(0, 0);
+		OrbitOledDrawString("You died!");
+	} 
+
   drawHead();
 }
 
 void drawSnake(void) {
   OrbitOledSetDrawMode(modOledSet);
   current = head;
-  int counter = 0;
   while (current) {
     OrbitOledMoveTo(current->coords.x, current->coords.y);
     OrbitOledDrawPixel();
@@ -387,11 +259,6 @@ void drawSnake(void) {
 void eraseTail(void) {
   OrbitOledSetDrawMode(modOledXor); 
   OrbitOledMoveTo(tail->coords.x, tail->coords.y);
-  OrbitOledDrawPixel();
-}
-void eraseFood(void){
-  OrbitOledSetDrawMode(modOledXor); 
-  OrbitOledMoveTo(food.x, food.y);
   OrbitOledDrawPixel();
 }
 void drawHead(void) {
@@ -433,12 +300,12 @@ int genRandNum(int n){
   return rand()%(n+1);
 }
 
-boolean intersectsWithSnake(struct point* point) {
-	current = head;
-	while (current) {
-		if (pointsIntersect(point, &(current->coords)) {
+boolean intersectsWithSnake(struct Segment *head, struct point* point) {
+	while (head) {
+		if (pointsIntersect(point, &(head->coords))) {
 			return true;
 		}
+		head = head->next;
 	}
 	return false;
 }
@@ -451,12 +318,9 @@ boolean pointsIntersect(struct point* point1, struct point* point2) {
 }
 
 /*
-* Erase the current food item. Generate a new one in a random location on the screen.
+* Generate a new one in a random location on the screen.
 */
 void generateFood(void) {
-
-  eraseFood();
-
 	// make sure the food does not spawn within the snake
 	do {
 		food.x = randNum(128);
@@ -466,6 +330,11 @@ void generateFood(void) {
   drawFood();
 }
 
+void eraseFood(void){
+  OrbitOledSetDrawMode(modOledXor); 
+  OrbitOledMoveTo(food.x, food.y);
+  OrbitOledDrawPixel();
+}
 void drawFood(){
   OrbitOledSetDrawMode(modOledSet); 
   OrbitOledMoveTo(food.x, food.y);
