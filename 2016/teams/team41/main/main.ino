@@ -18,7 +18,7 @@
 TODO:
 fix global variables vs local variables created in each loop() call... for example: lastUpdatedInput.
 coords are being copied around instead of being kept as pointers
-prevent food from spawning directly in front of the snake (or maybe even within a range around its head, and also its tail)
+change game structure to revolve around a 2D array instead of a linked list
 */
 
 void onButtonDown(void);
@@ -49,11 +49,8 @@ struct Input {
 const int NUM_INPUTS = 3;
 static Input INPUTS[NUM_INPUTS] = {
   {PF_0, false}, // SW_1
-  //{PF_4, false},
-   // SW_2
   {PD_2, false}, // BTN_1
   {PE_0, false}, // BTN_2
-
 };
 int active;
 int FPS = 10;
@@ -94,9 +91,9 @@ struct Segment *current = NULL;
 boolean isGrowing = false;
 
 const int X_BOUND_LEFT=0;
-const int X_BOUND_RIGHT=128;
+const int X_BOUND_RIGHT=127;
 const int Y_BOUND_TOP=0;
-const int Y_BOUND_BOTTOM=30;
+const int Y_BOUND_BOTTOM=29;
 
 enum direction {
   UP,
@@ -129,7 +126,7 @@ void setup() {
   GPIOPadConfigSet(GPIO_PORTF_BASE, GPIO_PIN_4,
       GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);  // Enable weak pullup resistor for PF4
 
-  // Interrupt setuü
+  // Interrupt setuÃ¼
   GPIOIntDisable(GPIO_PORTF_BASE, GPIO_PIN_4);        // Disable interrupt for PF4 (in case it was enabled)
   GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_4);      // Clear pending interrupts for PF4
   GPIOIntRegister(GPIO_PORTF_BASE, onButtonDown);     // Register our handler function for port F
@@ -368,13 +365,29 @@ boolean pointsIntersect(struct point* point1, struct point* point2) {
 * Generate a new one in a random location on the screen.
 */
 void generateFood(void) {
-  // make sure the food does not spawn within the snake
+  // make sure the food does not spawn within the snake or within one pixel of its head or tail
+  current = head;
   do {
-    food.x = genRandNum(128);
-    food.y = genRandNum(32);
-  } while (intersectsWithSnake(head, &food));
+    food.x = genRandNum(X_BOUND_RIGHT);
+    food.y = genRandNum(Y_BOUND_BOTTOM);
+  } while (!validateFoodLocation(&food));
 
   drawFood();
+}
+/*
+* Checks if the attempted food spawn location intersects with the snake or within one pixel of each of its segments
+* return true if no intersections were found; Otherwise, return false
+*/
+boolean validateFoodLocation(struct point* food) {
+  current = head;
+  while (current) {
+    if (pointsIntersect(&(current->coords), food))
+      return false;
+    if (abs(current->coords.x - food->x) == abs(current->coords.y - food->y) && abs(current->coords.x - food->x) == 1)
+      return false;
+    current = current->prev;
+  }
+  return true;
 }
 
 void eraseFood(void){
@@ -387,5 +400,4 @@ void drawFood(){
   OrbitOledMoveTo(food.x, food.y);
   OrbitOledDrawPixel();
 }
-
 
