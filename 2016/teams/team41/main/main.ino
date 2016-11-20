@@ -18,6 +18,7 @@ coords are being copied around instead of being kept as pointers
 need to investigate the WriteByte/WriteArray functions in the acceleromter updateDirection() function
 add a "calibrate" mode to set the 'center' to however the board is tilted
 fix threshold between up/left, up/right, ...
+change food spawn algorithm to detect when it's impossible to spawn food (game is over) and minimize random attempts (so basically make it not entirely random
 */
 
 void onButtonDown(void);
@@ -40,6 +41,8 @@ void eraseFood(void);
 int genRandNum(int n);
 
 void updateDirection(void); 
+
+void initGame(void); 
 
 struct Input {
   const int code;
@@ -340,7 +343,7 @@ void initializeOLED(void) {
   OrbitOledSetFillPattern(OrbitOledGetStdPattern(iptnSolid));
 }
 
-void initGame() {
+void initGame(void) {
   direction = RIGHT;
 
   (void) memset(world, 0, (X_BOUND_RIGHT+1)*(Y_BOUND_BOTTOM+1)*sizeof(char));
