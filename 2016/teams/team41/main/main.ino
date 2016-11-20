@@ -6,20 +6,18 @@
 #include <OrbitOledGrph.h>
 #include <string.h>
 #include <delay.h>
-#include "inc/hw_memmap.h"
-#include "inc/hw_types.h"
-#include "driverlib/gpio.h"
-#include "driverlib/sysctl.h"
-#include "inc/hw_gpio.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <Wire.h>
+#include "Wire_Util.h"
 /*
 TODO:
 fix global variables vs local variables created in each loop() call... for example: lastUpdatedInput.
 coords are being copied around instead of being kept as pointers
 change game structure to revolve around a 2D array instead of a linked list
+drawPixel/erasePixel with just coords aren't being used currently
+need to investigate the WriteByte/WriteArray functions in the acceleromter updateDirection() function
 */
 
 void onButtonDown(void);
@@ -31,17 +29,16 @@ void appendToHead(struct point*);
 void appendToHead(int,int);
 void initializeSnake(struct point[], int);
 
-void drawSnake(void);
-void eraseTail(void);
-void drawHead(void);
+void drawPixel(int,int);
+void erasePixel(int,int);
+void drawPixel(struct point*);
+void erasePixel(struct point*);
 
 int genRandNum(int n);
-boolean intersectsWithSnake(struct Segment *head, struct point* point);
-boolean pointsIntersect(struct point* point1, struct point* point2);
+boolean intersectsWithSnake(struct Segment *, struct point*);
 
-/*
- * Input
- */
+void updateDirection(void); 
+
 struct Input {
   const int code;
   boolean active; // for switches, this corresponds to the "up" position. For buttons, this corresponds to the "pressed" position
@@ -53,7 +50,6 @@ static Input INPUTS[NUM_INPUTS] = {
   {PD_2, false}, // BTN_1
   {PE_0, false}, // BTN_2
 };
-int active;
 int FPS = 10;
 struct Input *lastUpdatedInput;
 
@@ -73,7 +69,7 @@ struct Segment {
   struct Segment *next; // towards head
   struct Segment *prev; // towards tail
 };
-const int NUM_POINTS =9;
+const int NUM_POINTS = 9;
 struct point points[NUM_POINTS] = {
     {11, 11}, 
     {12, 11}, 
@@ -89,12 +85,14 @@ struct Segment *head = NULL;
 struct Segment *tail = NULL;
 struct Segment *current = NULL;
 
-boolean isGrowing = false;
+boolean snakeIsGrowing = false;
 
 const int X_BOUND_LEFT=0;
 const int X_BOUND_RIGHT=127;
 const int Y_BOUND_TOP=0;
 const int Y_BOUND_BOTTOM=31;
+
+char world[Y_BOUND_BOTTOM+1][X_BOUND_RIGHT+1] = {0};
 
 enum direction {
   UP,
@@ -115,10 +113,7 @@ void setup() {
 
   initializeOLED();
   
-  initializeSnake(points, NUM_POINTS); 
-  generateFood();
-  drawSnake();
-  drawFood();
+  initGame();
   OrbitOledUpdate();
 }
 
@@ -132,9 +127,13 @@ void loop() {
   DelayMs(1000/FPS);
 }
 
-void updateDirection() {
-  uint32_t data[6] = {0};
-  WireWriteByte(0x1D, 0x32);
+/*
+* Read accelerometer data and return the snake's updated direction based on the pitch & roll of the accelerometer
+*/
+void updateDirection(void) {
+  uint32_t data[6] = {0}; // instead of getting X0, X1, Y0, ... data separately, simply get all 6 bytes in one read. According to the specification, this removes the risk
+                          // of the data in those registers changing between access calls
+  WireWriteByte(0x1D, 0x32); // 
   WireRequestArray(0x1D, data, 6);
 
   uint16_t xi = (data[1] << 8) | data[0];
@@ -142,16 +141,16 @@ void updateDirection() {
   uint16_t zi = (data[5] << 8) | data[4];
 
   
-  float x = *(int16_t*)(&xi) / LSBperG;
-  float y = *(int16_t*)(&yi) / LSBperG;
-  float z = *(int16_t*)(&zi) / LSBperG;
+  float x = *(int16_t*)(&xi); // LSBperG
+  float y = *(int16_t*)(&yi); // LSBperG
+  float z = *(int16_t*)(&zi); // LSBperG
 
   float pitch = (atan2(x,sqrt(y*y+z*z)) * 180.0) / PI;
   float roll = (atan2(y,sqrt(x*x+z*z)) * 180.0) / PI;
 
   if (fabs(pitch) <= 10 && fabs(roll) <= 10) {
     return;
-  } else if (pitch > 0 && roll > 0) { // lower left
+  } else if (pitch > 0 && roll > 0) {
     if (pitch >= roll && direction != RIGHT) {
       direction = LEFT;
     } else if (direction != UP) {
@@ -205,13 +204,13 @@ void appendToHead(struct point *coords) {
 void initializeSnake(struct point coords[], int numCoords) {
   for (int i = 0; i < numCoords; i ++) {
     appendToHead(&coords[i]);
+    world[coords[i].y][coords[i].x] = 1;
+    drawPixel(&(coords[i]));
   }
 }
 
-/*
-*/
 void moveSnake() {
-  if (isGrowing) {
+  if (snakeIsGrowing) {
     switch(direction) {
       case LEFT:
         appendToHead(head->coords.x-1, head->coords.y);
@@ -226,12 +225,13 @@ void moveSnake() {
         appendToHead(head->coords.x, head->coords.y+1);
         break;
     }
-    isGrowing = false;
+    snakeIsGrowing = false;
   } 
   // To move the snake, the tail node has its coordinates moved ahead of the head (in some direction) and becomes the new head. The node that was previously ahead of the tail
   // becomes the new tail.
   else {
-    eraseTail();
+    erasePixel(&(tail->coords));
+    world[tail->coords.y][tail->coords.x] = 0;
     switch(direction) {
       case LEFT:
         tail->coords.x = head->coords.x-1;
@@ -273,39 +273,39 @@ void moveSnake() {
     head->coords.y = Y_BOUND_BOTTOM-1;
   }
 
-  if (pointsIntersect(&(head->coords), &food)) {
-    generateFood();
-    isGrowing = true;
-  } else {
-    // the snake can never intersect with its first three segments
-    if (intersectsWithSnake(head->prev->prev->prev, &(head->coords))) {
-      OrbitOledMoveTo(0, 0);
-      OrbitOledDrawString("You died!");
-    } 
+  if (world[head->coords.y][head->coords.x] == 1) {
+    OrbitOledMoveTo(0, 0);
+    OrbitOledDrawString("You died!");
   }
-
-  drawHead();
+  else {
+    if (world[head->coords.y][head->coords.x] == 2) {
+      eraseFood();
+      generateFood();
+      snakeIsGrowing = true;
+    }
+    drawPixel(&(head->coords));
+    world[head->coords.y][head->coords.x] = 1;
+  }
 }
 
-void drawSnake(void) {
+void drawPixel(struct point* point) {
+  drawPixel(point->x, point->y);
+}
+void erasePixel(struct point* point) {
+  erasePixel(point->x, point->y);
+}
+void drawPixel(int x, int y) {
   OrbitOledSetDrawMode(modOledSet);
-  current = head;
-  while (current) {
-    OrbitOledMoveTo(current->coords.x, current->coords.y);
-    OrbitOledDrawPixel();
-    current = current->prev;
-  }
-}
-
-void eraseTail(void) {
-  OrbitOledSetDrawMode(modOledXor); 
-  OrbitOledMoveTo(tail->coords.x, tail->coords.y);
+  OrbitOledMoveTo(x, y);
   OrbitOledDrawPixel();
 }
-void drawHead(void) {
-  OrbitOledSetDrawMode(modOledSet); 
-  OrbitOledMoveTo(head->coords.x, head->coords.y);
+void erasePixel(int x, int y) {
+  OrbitOledSetDrawMode(modOledXor);
+  OrbitOledMoveTo(x, y);
   OrbitOledDrawPixel();
+}
+void eraseFood() {
+  erasePixel(&food);
 }
 
 void initializeOLED(void) {
@@ -313,6 +313,15 @@ void initializeOLED(void) {
   OrbitOledClear();
   OrbitOledClearBuffer();
   OrbitOledSetFillPattern(OrbitOledGetStdPattern(iptnSolid));
+}
+
+void initGame() {
+  direction = RIGHT;
+
+  (void) memset(world, 0, (X_BOUND_RIGHT+1)*(Y_BOUND_BOTTOM+1)*sizeof(char));
+  initializeSnake(points, NUM_POINTS); 
+
+  generateFood();
 }
 
 /*
@@ -323,7 +332,7 @@ void initializeOLED(void) {
  */
 struct Input *updateInputs(void) {
   struct Input* lastUpdatedInput = NULL;
-  active = 0;
+  int active = 0;
   for (int i = 0; i < NUM_INPUTS; i ++) {
     active = digitalRead(INPUTS[i].code);
     if (active != INPUTS[i].active) {
@@ -341,60 +350,38 @@ int genRandNum(int n){
   return rand()%(n+1);
 }
 
-boolean intersectsWithSnake(struct Segment *head, struct point* point) {
-  while (head) {
-    if (pointsIntersect(point, &(head->coords))) {
-      return true;
-    }
-    head = head->prev;
-  }
-  return false;
-}
-
-/*
-* Return true if two points have identical x and y components; Otherwise, return false
-*/
-boolean pointsIntersect(struct point* point1, struct point* point2) {
-  return point1->x == point2->x && point1->y == point2->y;
-}
-
 /*
 * Generate a new one in a random location on the screen.
 */
 void generateFood(void) {
-  // make sure the food does not spawn within the snake or within one pixel of its head or tail
-  current = head;
+  // make sure the food does not spawn within the snake or within one pixel of any of its segments
   do {
     food.x = genRandNum(X_BOUND_RIGHT);
     food.y = genRandNum(Y_BOUND_BOTTOM);
   } while (!validateFoodLocation(&food));
 
-  drawFood();
+  world[food.y][food.x] = 2;
+
+  drawPixel(&food);
 }
 /*
 * Checks if the attempted food spawn location intersects with the snake or within one pixel of each of its segments
 * return true if no intersections were found; Otherwise, return false
 */
 boolean validateFoodLocation(struct point* food) {
-  current = head;
-  while (current) {
-    if (pointsIntersect(&(current->coords), food))
-      return false;
-    if (abs(current->coords.x - food->x) == abs(current->coords.y - food->y) && abs(current->coords.x - food->x) == 1)
-      return false;
-    current = current->prev;
-  }
+  if (
+    world[food->y][food->x] == 1 || 
+    world[food->y-1][food->x-1] == 1 || 
+    world[food->y][food->x-1] == 1 ||
+    world[food->y+1][food->x-1] == 1 ||
+    world[food->y+1][food->x] == 1 ||
+    world[food->y+1][food->x+1] == 1 ||
+    world[food->y][food->x+1] == 1 ||
+    world[food->y-1][food->x+1] == 1 ||
+    world[food->y-1][food->x] == 1
+  ) 
+    return false;
   return true;
 }
 
-void eraseFood(void){
-  OrbitOledSetDrawMode(modOledXor); 
-  OrbitOledMoveTo(food.x, food.y);
-  OrbitOledDrawPixel();
-}
-void drawFood(){
-  OrbitOledSetDrawMode(modOledSet); 
-  OrbitOledMoveTo(food.x, food.y);
-  OrbitOledDrawPixel();
-}
 
