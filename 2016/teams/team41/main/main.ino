@@ -15,7 +15,6 @@
 TODO:
 fix global variables vs local variables created in each loop() call... for example: lastUpdatedInput.
 coords are being copied around instead of being kept as pointers
-change game structure to revolve around a 2D array instead of a linked list
 need to investigate the WriteByte/WriteArray functions in the acceleromter updateDirection() function
 add a "calibrate" mode to set the 'center' to however the board is tilted
 fix threshold between up/left, up/right, ...
@@ -159,7 +158,7 @@ void updateDirection(void) {
   float pitch = (atan2(x,sqrt(y*y+z*z)) * 180.0) / PI;
   float roll = (atan2(y,sqrt(x*x+z*z)) * 180.0) / PI;
 
-  if (fabs(pitch) <= 10 && fabs(roll) <= 10 || fabs(pitch-roll) <= 7) {
+  if (fabs(pitch) <= 10 && fabs(roll) <= 10 || fabs(pitch-roll) <= 20) {
     return;
   } else if (pitch > 0 && roll > 0) {
     if (pitch >= roll && direction != RIGHT) {
@@ -225,17 +224,23 @@ void moveSnake() {
     switch(direction) {
       case LEFT:
         appendToHead(head->coords.x-1, head->coords.y);
+        appendToHead(head->coords.x-1, head->coords.y);
         break;
       case RIGHT:
+        appendToHead(head->coords.x+1, head->coords.y);
         appendToHead(head->coords.x+1, head->coords.y);
         break;
       case UP:
         appendToHead(head->coords.x, head->coords.y-1);
+        appendToHead(head->coords.x, head->coords.y-1);
         break;
       case DOWN:
         appendToHead(head->coords.x, head->coords.y+1);
+        appendToHead(head->coords.x, head->coords.y+1);
         break;
     }
+    drawPixel(&(head->prev->coords));
+    world[head->prev->coords.y][head->prev->coords.x] = 1;
     snakeIsGrowing = false;
   } 
   // To move the snake, the tail node has its coordinates moved ahead of the head (in some direction) and becomes the new head. The node that was previously ahead of the tail
@@ -296,7 +301,7 @@ void moveSnake() {
     
     drawPixel(&(head->coords));
     world[head->coords.y][head->coords.x] = 1;
-    
+
     if (snakeIsGrowing) {
       generateFood();
     } 
@@ -403,6 +408,7 @@ boolean validateFoodLocation(void) {
   }
   return true;
 }
+
 
 
 
