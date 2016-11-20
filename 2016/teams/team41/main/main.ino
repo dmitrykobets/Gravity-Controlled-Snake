@@ -16,8 +16,9 @@ TODO:
 fix global variables vs local variables created in each loop() call... for example: lastUpdatedInput.
 coords are being copied around instead of being kept as pointers
 change game structure to revolve around a 2D array instead of a linked list
-drawPixel/erasePixel with just coords aren't being used currently
 need to investigate the WriteByte/WriteArray functions in the acceleromter updateDirection() function
+add a "calibrate" mode to set the 'center' to however the board is tilted
+fix threshold between up/left, up/right, ...
 */
 
 void onButtonDown(void);
@@ -34,8 +35,10 @@ void erasePixel(int,int);
 void drawPixel(struct point*);
 void erasePixel(struct point*);
 
+boolean validateFoodLocation(void);
+void eraseFood(void);
+
 int genRandNum(int n);
-boolean intersectsWithSnake(struct Segment *, struct point*);
 
 void updateDirection(void); 
 
@@ -59,7 +62,14 @@ struct Input *lastUpdatedInput;
 struct point {
   int x;
   int y;
+};
+
+struct food {
+  struct point coords;
+  int width;
+  int height;
 } food;
+
 
 /*
  * Snake components
@@ -115,6 +125,8 @@ void setup() {
   
   initGame();
   OrbitOledUpdate();
+
+  Serial.begin(9600);
 }
 
 void loop() {
@@ -139,7 +151,6 @@ void updateDirection(void) {
   uint16_t xi = (data[1] << 8) | data[0];
   uint16_t yi = (data[3] << 8) | data[2];
   uint16_t zi = (data[5] << 8) | data[4];
-
   
   float x = *(int16_t*)(&xi); // LSBperG
   float y = *(int16_t*)(&yi); // LSBperG
@@ -148,7 +159,7 @@ void updateDirection(void) {
   float pitch = (atan2(x,sqrt(y*y+z*z)) * 180.0) / PI;
   float roll = (atan2(y,sqrt(x*x+z*z)) * 180.0) / PI;
 
-  if (fabs(pitch) <= 10 && fabs(roll) <= 10) {
+  if (fabs(pitch) <= 10 && fabs(roll) <= 10 || fabs(pitch-roll) <= 7) {
     return;
   } else if (pitch > 0 && roll > 0) {
     if (pitch >= roll && direction != RIGHT) {
@@ -280,11 +291,15 @@ void moveSnake() {
   else {
     if (world[head->coords.y][head->coords.x] == 2) {
       eraseFood();
-      generateFood();
       snakeIsGrowing = true;
     }
+    
     drawPixel(&(head->coords));
     world[head->coords.y][head->coords.x] = 1;
+    
+    if (snakeIsGrowing) {
+      generateFood();
+    } 
   }
 }
 
@@ -305,7 +320,12 @@ void erasePixel(int x, int y) {
   OrbitOledDrawPixel();
 }
 void eraseFood() {
-  erasePixel(&food);
+  for (int y = food.coords.y; y < food.coords.y+food.height; y ++) {
+    for (int x = food.coords.x;  x < food.coords.x+food.width;  x ++) {
+      erasePixel(x,y);
+      world[y][x] = 0;
+    }
+  }
 }
 
 void initializeOLED(void) {
@@ -321,6 +341,8 @@ void initGame() {
   (void) memset(world, 0, (X_BOUND_RIGHT+1)*(Y_BOUND_BOTTOM+1)*sizeof(char));
   initializeSnake(points, NUM_POINTS); 
 
+  food.width = 3;
+  food.height = 3;
   generateFood();
 }
 
@@ -356,32 +378,31 @@ int genRandNum(int n){
 void generateFood(void) {
   // make sure the food does not spawn within the snake or within one pixel of any of its segments
   do {
-    food.x = genRandNum(X_BOUND_RIGHT);
-    food.y = genRandNum(Y_BOUND_BOTTOM);
-  } while (!validateFoodLocation(&food));
+    food.coords.x = genRandNum(X_BOUND_RIGHT-(food.width-1));
+    food.coords.y = genRandNum(Y_BOUND_BOTTOM-(food.height-1));
+  } while (!validateFoodLocation());
 
-  world[food.y][food.x] = 2;
-
-  drawPixel(&food);
+  for (int y = food.coords.y; y < food.coords.y+food.height; y ++) {
+    for (int x = food.coords.x;  x < food.coords.x+food.width;  x ++) {
+      world[y][x] = 2;
+      drawPixel(x,y);
+    }
+  }
 }
 /*
 * Checks if the attempted food spawn location intersects with the snake or within one pixel of each of its segments
 * return true if no intersections were found; Otherwise, return false
 */
-boolean validateFoodLocation(struct point* food) {
-  if (
-    world[food->y][food->x] == 1 || 
-    world[food->y-1][food->x-1] == 1 || 
-    world[food->y][food->x-1] == 1 ||
-    world[food->y+1][food->x-1] == 1 ||
-    world[food->y+1][food->x] == 1 ||
-    world[food->y+1][food->x+1] == 1 ||
-    world[food->y][food->x+1] == 1 ||
-    world[food->y-1][food->x+1] == 1 ||
-    world[food->y-1][food->x] == 1
-  ) 
-    return false;
+boolean validateFoodLocation(void) {
+  for (int y = food.coords.y - (food.coords.y == Y_BOUND_TOP ? 0 : 1); y < food.coords.y + food.height + (food.coords.y+food.height-1 == Y_BOUND_BOTTOM ? 0 : 1); y ++) {
+    for (int x = food.coords.x - (food.coords.x == X_BOUND_LEFT ? 0: 1);  x < food.coords.x + food.width + (food.coords.x+food.width-1 == X_BOUND_RIGHT ? 0 : 1);  x ++) {
+      if (world[y][x] == 1) {
+        return false;
+      }
+    }
+  }
   return true;
 }
+
 
 
