@@ -16,7 +16,6 @@ TODO:
 fix global variables vs local variables created in each loop() call... for example: lastUpdatedInput.
 coords are being copied around instead of being kept as pointers
 need to investigate the WriteByte/WriteArray functions in the acceleromter updateDirection() function
-add a "calibrate" mode to set the 'center' to however the board is tilted
 fix threshold between up/left, up/right, ...
 change food spawn algorithm to detect when it's impossible to spawn food (game is over) and minimize random attempts (so basically make it not entirely random
 */
@@ -113,7 +112,7 @@ enum direction {
   RIGHT
 } direction=RIGHT;
 
-
+float pitchOffset = 0, rollOffset = 0;
 float LSBperG = 128.0;
 
 void setup() {
@@ -122,6 +121,10 @@ void setup() {
   
   WireWriteRegister(0x1D, 0x2D, 1 << 3); // set standby in the POWER_CTL register
   WireWriteRegister(0x1D, 0x31, 1); // set 10-bit res with 4g range
+
+	for (int i = 0; i < NUM_INPUTS; i ++) {
+    pinMode(INPUTS[i].code, INPUT);
+  }
 
   initializeOLED();
   
@@ -133,6 +136,13 @@ void setup() {
 
 void loop() {
 
+	lastUpdatedInput = updateInputs();
+	switch(lastUpdatedInput->code) {
+		case PF_0:
+			zeroAccelerometer();
+			break;
+	}
+
   updateDirection();
   moveSnake();
   
@@ -141,13 +151,17 @@ void loop() {
   DelayMs(1000/FPS);
 }
 
-/*
-* Read accelerometer data and return the snake's updated direction based on the pitch & roll of the accelerometer
-*/
-void updateDirection(void) {
+void zeroAccelerometer(void) {
+	readAccelerometer(&pitchOffset, &rollOffset, 0,0);
+}
+
+/* 
+* Reads accelerometer x, y, z data and compute pitch and roll.
+*/ 
+void readAccelerometer(float *pitch, float *roll, float pitchOffset, float rollOffset) {
   uint32_t data[6] = {0}; // instead of getting X0, X1, Y0, ... data separately, simply get all 6 bytes in one read. According to the specification, this removes the risk
                           // of the data in those registers changing between access calls
-  WireWriteByte(0x1D, 0x32); // 
+  WireWriteByte(0x1D, 0x32); //
   WireRequestArray(0x1D, data, 6);
 
   uint16_t xi = (data[1] << 8) | data[0];
@@ -158,10 +172,21 @@ void updateDirection(void) {
   float y = *(int16_t*)(&yi); // LSBperG
   float z = *(int16_t*)(&zi); // LSBperG
 
-  float pitch = (atan2(x,sqrt(y*y+z*z)) * 180.0) / PI;
-  float roll = (atan2(y,sqrt(x*x+z*z)) * 180.0) / PI;
+  *pitch = (atan2(x,sqrt(y*y+z*z)) * 180.0) / PI;
+  *roll = (atan2(y,sqrt(x*x+z*z)) * 180.0) / PI;
 
-  if (fabs(pitch) <= 10 && fabs(roll) <= 10 || fabs(pitch-roll) <= 20) {
+	*pitch -= pitchOffset;
+	*roll -= rollOffset;
+}
+
+/*
+* Read accelerometer data and return the snake's updated direction based on the pitch & roll of the accelerometer
+*/
+void updateDirection(void) {
+	float pitch = 0, roll = 0;
+	readAccelerometer(&pitch, &roll, pitchOffset, rollOffset);
+
+  if (fabs(pitch) <= 7 && fabs(roll) <= 7 || fabs(pitch-roll) <= 15) {
     return;
   } else if (pitch > 0 && roll > 0) {
     if (pitch >= roll && direction != RIGHT) {
@@ -411,7 +436,3 @@ boolean validateFoodLocation(void) {
   }
   return true;
 }
-
-
-
-
