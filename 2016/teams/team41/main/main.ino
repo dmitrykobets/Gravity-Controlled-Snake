@@ -40,8 +40,13 @@ void eraseFood(void);
 int genRandNum(int n);
 
 void updateDirection(void); 
+void zeroAccelerometer(void);
+void readAccelerometer(float*,float*,float,float);
 
+void runGame(void);
 void initGame(void); 
+void runMainMenu(void);
+void initMainMenu(void); 
 
 struct Input {
   const int code;
@@ -115,6 +120,10 @@ enum direction {
 float pitchOffset = 0, rollOffset = 0;
 float LSBperG = 128.0;
 
+enum Mode {
+	GAME, MAIN_MENU, SETTINGS
+} mode = MAIN_MENU;
+
 void setup() {
   WireInit();
   delay(200);
@@ -128,27 +137,150 @@ void setup() {
 
   initializeOLED();
   
-  initGame();
   OrbitOledUpdate();
+
+	initMode();
 
   Serial.begin(9600);
 }
 
-void loop() {
+void initMode() {
+	switch(mode) {
+		case GAME:
+			initGame();
+			break;
+		case MAIN_MENU:
+			initMainMenu();
+			break;
+		case SETTINGS:
+			initSettings();
+			break;
+	}
+}
+void endMode() {
+	switch(mode) {
+		case GAME:
+			endGame();
+			break;
+	}
+	OrbitOledClear();
+}
 
+void switchMode(enum Mode newMode) {
+	endMode();
+	mode = newMode;
+	initMode();
+}
+
+void loop() {
+	switch(mode) {
+		case GAME:
+			runGame();
+			break;
+		case MAIN_MENU:
+			runMainMenu();
+			break;
+		case SETTINGS:
+			runSettings();
+			break;
+	}
+  DelayMs(1000/FPS);
+}
+
+void initSettings(void) {
+	OrbitOledMoveTo(0, 0);
+	OrbitOledDrawString("nothing to see here");
+	OrbitOledMoveTo(0, 10);
+	OrbitOledDrawString("move along");
+	OrbitOledUpdate();	
+}
+void runSettings(void) {
+	lastUpdatedInput = updateInputs();
+	switch(lastUpdatedInput->code) {
+		case PD_2:
+			if (lastUpdatedInput->active)
+				switchMode(MAIN_MENU);
+			return;
+	}
+}
+
+void runGame(void) {
 	lastUpdatedInput = updateInputs();
 	switch(lastUpdatedInput->code) {
 		case PF_0:
 			zeroAccelerometer();
 			break;
+		case PD_2:
+			if (lastUpdatedInput->active)
+				switchMode(MAIN_MENU);
+			return;
 	}
 
   updateDirection();
   moveSnake();
   
   OrbitOledUpdate();
-  
-  DelayMs(1000/FPS);
+}
+int offset = 12;
+void runMainMenu(void) {
+	
+	lastUpdatedInput = updateInputs();
+	switch(lastUpdatedInput->code) {
+		case PD_2:
+			if (lastUpdatedInput->active) {
+				Serial.println(abs(offset-12)); // words are 7 tall and have padding of 4, so 3 to 3, next is 7 to 13, then 17 to 23 // and midpoints become 0, 10, 20...
+				if (abs(offset-12)-0 <= 3)
+					switchMode(GAME);
+				else if (abs(abs(offset-12)-10) <= 3) 
+					switchMode(SETTINGS);
+				return;
+			}
+	}
+	
+
+	float pitch, roll;
+	readAccelerometer(&pitch, &roll, 0, 0);
+  if (fabs(roll) > 7) {
+		if (roll > 0)
+			offset ++;
+		else
+	 // else	if (offset > 8) {
+			offset --;
+	//	}
+		OrbitOledClear();
+		OrbitOledMoveTo(10, offset);
+		OrbitOledDrawString("play game");
+		OrbitOledMoveTo(10, offset+10);
+		OrbitOledDrawString("settings");
+		OrbitOledMoveTo(10, offset+20);
+		OrbitOledDrawString("about");
+		OrbitOledMoveTo(10, offset+30);
+		OrbitOledDrawString("nothing here");
+
+		OrbitOledMoveTo(0, 0);
+		OrbitOledFillRect(X_BOUND_RIGHT, 9);
+		OrbitOledMoveTo(0, Y_BOUND_BOTTOM-9);
+		OrbitOledFillRect(X_BOUND_RIGHT, Y_BOUND_BOTTOM);
+		OrbitOledUpdate();
+	}
+}
+void initMainMenu(void) {
+		offset = 12;
+		OrbitOledClear();
+		OrbitOledMoveTo(10, offset);
+		OrbitOledDrawString("play game");
+		OrbitOledMoveTo(10, offset+10);
+		OrbitOledDrawString("settings");
+		OrbitOledMoveTo(10, offset+20);
+		OrbitOledDrawString("about");
+		OrbitOledMoveTo(10, offset+30);
+		OrbitOledDrawString("nothing here");
+
+		OrbitOledMoveTo(0, 0);
+		OrbitOledFillRect(X_BOUND_RIGHT, 9);
+		OrbitOledMoveTo(0, Y_BOUND_BOTTOM-9);
+		OrbitOledFillRect(X_BOUND_RIGHT, Y_BOUND_BOTTOM);
+		OrbitOledUpdate();
 }
 
 void zeroAccelerometer(void) {
@@ -368,7 +500,34 @@ void initializeOLED(void) {
   OrbitOledSetFillPattern(OrbitOledGetStdPattern(iptnSolid));
 }
 
+void endGame(void) {
+	// free each node forming the snake's linked list
+	current = head;
+	while (current && current->prev) {
+		current = current->prev;
+		free(current->next);
+	}
+	free(current);
+
+	tail = head = NULL;
+}
 void initGame(void) {
+
+	// count in
+	OrbitOledSetDrawMode(modOledSet);
+	char output[2];
+	for (int i = 10; i >= 1; i --) {
+		OrbitOledMoveTo(X_BOUND_RIGHT/2,Y_BOUND_BOTTOM/2);
+		sprintf(output, "%d", i);	
+		OrbitOledDrawString(output);
+		OrbitOledUpdate();
+		if (i >= 7)
+			delay(1000);
+		else if (i >= 1)
+			delay(35);
+		OrbitOledClear();
+	}
+
   direction = RIGHT;
 
   (void) memset(world, 0, (X_BOUND_RIGHT+1)*(Y_BOUND_BOTTOM+1)*sizeof(char));
@@ -409,7 +568,7 @@ int genRandNum(int n){
 * Generate a new one in a random location on the screen.
 */
 void generateFood(void) {
-  // make sure the food does not spawn within the snake or within one pixel of any of its segments
+  // make sure the food does not spawn within the snake or within one pixel of an of its segments
   do {
     food.coords.x = genRandNum(X_BOUND_RIGHT-(food.width-1));
     food.coords.y = genRandNum(Y_BOUND_BOTTOM-(food.height-1));
