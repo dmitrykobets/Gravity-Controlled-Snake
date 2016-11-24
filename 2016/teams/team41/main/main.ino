@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <Wire.h>
 #include "Wire_Util.h"
+
 /*
 TODO:
 fix global variables vs local variables created in each loop() call... for example: lastUpdatedInput.
@@ -62,9 +63,13 @@ static Input INPUTS[NUM_INPUTS] = {
 int FPS = 10;
 struct Input *lastUpdatedInput;
 
-/*
- * Game control constants
- */
+char upArrow[] = {
+  0x20, 0x40, 0xFF, 0x40, 0x20  
+};
+char downArrow[] = {
+  0x04, 0x02, 0xFF, 0x02, 0x04  
+};
+
 struct point {
   int x;
   int y;
@@ -76,7 +81,6 @@ struct food {
   int height;
 } food;
 
-
 /*
  * Snake components
  */
@@ -85,17 +89,19 @@ struct Segment {
   struct Segment *next; // towards head
   struct Segment *prev; // towards tail
 };
-const int NUM_POINTS = 9;
+const int NUM_POINTS = 10;
 struct point points[NUM_POINTS] = {
-    {11, 11}, 
-    {12, 11}, 
-    {13, 11}, 
-    {14, 11}, 
-    {15, 11}, 
-    {16, 11}, 
-    {17, 11}, 
-    {18, 11}, 
-    {19, 11}};
+    {16, 15}, 
+    {17, 15}, 
+    {18, 15}, 
+    {19, 15}, 
+    {20, 15}, 
+    {21, 15}, 
+    {22, 15}, 
+    {23, 15}, 
+    {24, 15}, 
+    {25, 15}, 
+};
 
 struct Segment *head = NULL;
 struct Segment *tail = NULL;
@@ -122,8 +128,15 @@ float pitchOffset = 0, rollOffset = 0;
 float LSBperG = 128.0;
 
 enum Screen {
-  GAME, MAIN_MENU, SETTINGS, DEATH
+  GAME, MAIN_MENU, SETTINGS, DEATH, CALIBRATE, DEATH_TRANSITION 
 } screen = MAIN_MENU;
+
+char *scrollingMenuOptions[5] = {'\0'};
+int numScrollingMenuOptions = 0;
+char *scrollingMenuTitle = "";
+char *deathOptions[] = {"try again", "give up"};
+char *settingsOptions[] = {"back to menu", "calibrate"};
+char *mainMenuOptions[] = {"play game", "settings"};
 
 void setup() {
   WireInit();
@@ -135,6 +148,7 @@ void setup() {
   for (int i = 0; i < NUM_INPUTS; i ++) {
     pinMode(INPUTS[i].code, INPUT);
   }
+  pinMode(GREEN_LED, OUTPUT);
 
   initializeOLED();
   
@@ -158,6 +172,9 @@ void initScreen() {
       break;
     case DEATH:
       initDeath();
+      break;
+    case CALIBRATE:
+      initCalibrate();
       break;
   }
 }
@@ -190,49 +207,85 @@ void loop() {
     case DEATH:
       runDeath();
       break;
+    case DEATH_TRANSITION:
+      runDeathTransition();
+      break;
+    case CALIBRATE:
+      runCalibrate();
+      break;
   }
   DelayMs(1000/FPS);
 }
 
-void initDeath(void) {
+void runDeathTransition() {
   OrbitOledSetDrawMode(modOledSet);
-  OrbitOledMoveTo(0, 0);
-  OrbitOledDrawString("You died");
-
-  OrbitOledMoveTo(0, 10);
-  OrbitOledDrawString("... pathetic");
-  
+  OrbitOledMoveTo(10, 10);
+  OrbitOledDrawString("You died!");
   OrbitOledUpdate();
+  delay(1500);
+  OrbitOledClear();
+  OrbitOledMoveTo(20, 20);
+  OrbitOledDrawString("... pathetic");
+  OrbitOledUpdate();
+  delay(1500);
+  switchScreen(DEATH);
+}
+
+void initDeath(void) {
+  initScrollingMenu("The void", deathOptions, sizeof(deathOptions)/sizeof(deathOptions[0]));
 }
 void runDeath(void) {
-  lastUpdatedInput = updateInputs();
-  switch(lastUpdatedInput->code) {
-    case PE_0:
-      if (lastUpdatedInput->active)
-        switchScreen(MAIN_MENU);
+  int optionIndex = runScrollingMenu();
+  switch (optionIndex) {
+    case 0:
+      switchScreen(GAME);
       return;
-    case PD_2:
-      if (lastUpdatedInput->active)
-        switchScreen(GAME);
+    case 1:
+      switchScreen(MAIN_MENU);
       return;
   }
 }
 
-void initSettings(void) {
+void initCalibrate() {
+  OrbitOledSetDrawMode(modOledSet);
   OrbitOledMoveTo(0, 0);
-  OrbitOledDrawString("settings go");
-  OrbitOledMoveTo(0, 10);
-  OrbitOledDrawString("here");
-  OrbitOledUpdate();  
+  OrbitOledDrawString("Orient the board");
+  OrbitOledMoveTo(5, 10);
+  OrbitOledDrawString("& Press BTN1");
+  OrbitOledUpdate();
 }
-void runSettings(void) {
+void runCalibrate() {
   lastUpdatedInput = updateInputs();
   switch(lastUpdatedInput->code) {
-    case PE_0:
-      if (lastUpdatedInput->active)
-        switchScreen(MAIN_MENU);
+    case PD_2:
+      if (lastUpdatedInput->active) {
+        OrbitOledClear();
+        OrbitOledMoveTo(0,0);
+        OrbitOledDrawString("Calibrating...");
+        OrbitOledUpdate();
+        digitalWrite(GREEN_LED, HIGH);
+        zeroAccelerometer();
+        delay(1000);
+        digitalWrite(GREEN_LED, LOW);
+        switchScreen(SETTINGS);
+        return;
+      }
+  }
+}
+
+void runSettings(void) {
+  int optionIndex = runScrollingMenu();
+  switch (optionIndex) {
+    case 0:
+      switchScreen(MAIN_MENU);
+      return;
+    case 1:
+      switchScreen(CALIBRATE);
       return;
   }
+}
+void initSettings(void) {
+  initScrollingMenu("settings", settingsOptions, sizeof(settingsOptions)/sizeof(settingsOptions[0]));
 }
 
 void runGame(void) {
@@ -251,15 +304,24 @@ void runGame(void) {
   moveSnake();
 
   if (snakeIsDead) {
-    switchScreen(DEATH);
+    switchScreen(DEATH_TRANSITION);
     return;
   }
   OrbitOledUpdate();
 }
-int offset = 0;
-void runMainMenu(void) {
-  const int NUM_OPTIONS = 2;
-  enum Screen options[NUM_OPTIONS] = {GAME, SETTINGS};  
+
+int offset = 12;
+void initScrollingMenu(char *newTitle, char *newOptions[], int numOptions) {
+  offset = 12;
+  scrollingMenuTitle = newTitle;
+  for (int i = 0; i < numOptions; i ++) {
+    scrollingMenuOptions[i] = newOptions[i];
+  }
+  numScrollingMenuOptions = numOptions;
+  drawScrollingMenu();
+}
+
+int runScrollingMenu() {
   lastUpdatedInput = updateInputs();
   switch(lastUpdatedInput->code) {
     case PD_2:
@@ -267,82 +329,95 @@ void runMainMenu(void) {
         // words are 7 tall and have padding of 4, so 3 to 3, next is 7 to 13, then 17 to 23 // and midpoints become 0, 10, 20...
         int optionIndex = (abs(offset-12)+3)/10;
         if (abs(abs(offset-12)-optionIndex) <= optionIndex*10+3) {
-          switch (optionIndex) {
-            case 0:
-              switchScreen(GAME);
-              return;
-            case 1:
-              switchScreen(SETTINGS);
-              return;
-          }
+          return optionIndex;
         }
       }
     break;
   }
 
   float pitch, roll;
-  readAccelerometer(&pitch, &roll, 0, 0);
+  readAccelerometer(&pitch, &roll, pitchOffset, rollOffset);
   if (fabs(roll) > 7) {
     if (roll > 0) {
       if (offset-12 < 3) {
         offset ++;
+        drawScrollingMenu();
       }
     }
-    else if (offset-12 > - (NUM_OPTIONS-1)*10 - 3) {
+    else if (offset-12 > - (numScrollingMenuOptions-1)*10 - 3) {
       offset --;
+      drawScrollingMenu();
     }
-    drawMainMenuContents(NUM_OPTIONS);
   }
+  return -1;
 }
-void drawMainMenuContents(const int NUM_OPTIONS) {
+
+void drawScrollingMenu() {
     OrbitOledClear();
-    for (int i = 0; i < NUM_OPTIONS; i ++) {
+    OrbitOledSetDrawMode(modOledSet);
+    for (int i = 0; i < numScrollingMenuOptions; i ++) {
       OrbitOledMoveTo(10, offset+i*10);
-      switch (i) {
-        case 0:
-          OrbitOledDrawString("play game");
-          break;
-        case 1:
-          OrbitOledDrawString("settings");
-          break;
-      }
+      OrbitOledDrawString(scrollingMenuOptions[i]);
     }
     OrbitOledMoveTo(0, 0);
     OrbitOledFillRect(X_BOUND_RIGHT, 9);
     OrbitOledMoveTo(0, Y_BOUND_BOTTOM-9);
     OrbitOledFillRect(X_BOUND_RIGHT, Y_BOUND_BOTTOM);
+
+    OrbitOledSetDrawMode(modOledXor);
+    OrbitOledMoveTo(0,1);
+    OrbitOledDrawString(scrollingMenuTitle);
+
+    OrbitOledMoveTo(X_BOUND_RIGHT-6, 1);
+    OrbitOledPutBmp(5, 8, upArrow);
+    OrbitOledMoveTo(X_BOUND_RIGHT-6, Y_BOUND_BOTTOM-8);
+    OrbitOledPutBmp(5, 8, downArrow);
     OrbitOledUpdate();
 }
+
+void runMainMenu(void) {
+  int optionIndex = runScrollingMenu();
+  switch (optionIndex) {
+    case 0:
+      switchScreen(GAME);
+      return;
+    case 1:
+      switchScreen(SETTINGS);
+      return;
+  }
+}
 void initMainMenu(void) {
-    offset = 12;
-    const int NUM_OPTIONS = 2;
-    enum Screen options[NUM_OPTIONS] = {GAME, SETTINGS};  
-    drawMainMenuContents(NUM_OPTIONS);
+  initScrollingMenu("main menu", mainMenuOptions, sizeof(mainMenuOptions)/sizeof(mainMenuOptions[0]));
 }
 
 void zeroAccelerometer(void) {
   readAccelerometer(&pitchOffset, &rollOffset, 0,0);
 }
-
 /* 
 * Reads accelerometer x, y, z data and compute pitch and roll.
 */ 
 void readAccelerometer(float *pitch, float *roll, float pitchOffset, float rollOffset) {
+
   uint32_t data[6] = {0}; // instead of getting X0, X1, Y0, ... data separately, simply get all 6 bytes in one read. According to the specification, this removes the risk
                           // of the data in those registers changing between access calls
-  WireWriteByte(0x1D, 0x32); //
-  WireRequestArray(0x1D, data, 6);
 
-  uint16_t xi = (data[1] << 8) | data[0];
-  uint16_t yi = (data[3] << 8) | data[2];
-  uint16_t zi = (data[5] << 8) | data[4];
-  
-  float x = *(int16_t*)(&xi); // LSBperG
-  float y = *(int16_t*)(&yi); // LSBperG
-  float z = *(int16_t*)(&zi); // LSBperG
+  for (int i = 0; i < 5; i ++) {
+    WireWriteByte(0x1D, 0x32); //
+    WireRequestArray(0x1D, data, 6);
 
-  *pitch = (atan2(x,sqrt(y*y+z*z)) * 180.0) / PI;
-  *roll = (atan2(y,sqrt(x*x+z*z)) * 180.0) / PI;
+    uint16_t xi = (data[1] << 8) | data[0];
+    uint16_t yi = (data[3] << 8) | data[2];
+    uint16_t zi = (data[5] << 8) | data[4];
+    
+    float x = *(int16_t*)(&xi); // LSBperG
+    float y = *(int16_t*)(&yi); // LSBperG
+    float z = *(int16_t*)(&zi); // LSBperG
+
+    *pitch += (atan2(x,sqrt(y*y+z*z)) * 180.0) / PI;
+    *roll += (atan2(y,sqrt(x*x+z*z)) * 180.0) / PI;
+  }
+  *pitch /= 5;
+  *roll /= 5;
 
   *pitch -= pitchOffset;
   *roll -= rollOffset;
@@ -571,8 +646,27 @@ void initGame(void) {
   (void) memset(world, 0, (X_BOUND_RIGHT+1)*(Y_BOUND_BOTTOM+1)*sizeof(char));
   initializeSnake(points, NUM_POINTS); 
 
+  for (int i = 11; i <= 20; i ++) {
+    world[i][11] = 1; 
+    drawPixel(11, i);
+  }
+  world[11][12] = 1;
+  drawPixel(12, 11);
+  world[20][12] = 1;
+  drawPixel(12, 20);
+
+  for (int i = 11; i <= 20; i ++) {
+    world[i][X_BOUND_RIGHT-11] = 1; 
+    drawPixel(X_BOUND_RIGHT-11, i);
+  }
+  world[11][X_BOUND_RIGHT-12] = 1;
+  drawPixel(X_BOUND_RIGHT-12, 11);
+  world[20][X_BOUND_RIGHT-12] = 1;
+  drawPixel(X_BOUND_RIGHT-12, 20);
+
   food.width = 3;
   food.height = 3;
+  randomSeed(analogRead(0));
   generateFood();
 }
 
@@ -596,20 +690,13 @@ struct Input *updateInputs(void) {
 }
 
 /*
-* Generates a random number between 0 and @n inclusive
-*/
-int genRandNum(int n){
-  return rand()%(n+1);
-}
-
-/*
 * Generate a new one in a random location on the screen.
 */
 void generateFood(void) {
   // make sure the food does not spawn within the snake or within one pixel of an of its segments
   do {
-    food.coords.x = genRandNum(X_BOUND_RIGHT-(food.width-1));
-    food.coords.y = genRandNum(Y_BOUND_BOTTOM-(food.height-1));
+    food.coords.x = random(0, X_BOUND_RIGHT-(food.width-1));
+    food.coords.y = random(0, Y_BOUND_BOTTOM-(food.height-1));
   } while (!validateFoodLocation());
 
   for (int y = food.coords.y; y < food.coords.y+food.height; y ++) {
@@ -633,4 +720,5 @@ boolean validateFoodLocation(void) {
   }
   return true;
 }
+
 
