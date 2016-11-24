@@ -327,10 +327,8 @@ int runScrollingMenu() {
     case PD_2:
       if (lastUpdatedInput->active) {
         // words are 7 tall and have padding of 4, so 3 to 3, next is 7 to 13, then 17 to 23 // and midpoints become 0, 10, 20...
-        int optionIndex = (abs(offset-12)+3)/10;
-        if (abs(abs(offset-12)-optionIndex) <= optionIndex*10+3) {
-          return optionIndex;
-        }
+        if ((abs(offset-12)+3)%10 <= 6)
+          return (abs(offset-12)+3)/10;
       }
     break;
   }
