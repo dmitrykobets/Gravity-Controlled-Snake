@@ -11,13 +11,13 @@
 #include <stdio.h>
 #include <Wire.h>
 #include "Wire_Util.h"
+#include "screen.c"
+#include "scrolling_menu.c"
 
 /*
 TODO:
 fix global variables vs local variables created in each loop() call... for example: lastUpdatedInput.
 coords are being copied around instead of being kept as pointers
-need to investigate the WriteByte/WriteArray functions in the acceleromter updateDirection() function
-fix threshold between up/left, up/right, ...
 change food spawn algorithm to detect when it's impossible to spawn food (game is over) and minimize random attempts (so basically make it not entirely random
 */
 
@@ -44,11 +44,6 @@ void updateDirection(void);
 void zeroAccelerometer(void);
 void readAccelerometer(float*,float*,float,float);
 
-void runGame(void);
-void initGame(void); 
-void runMainMenu(void);
-void initMainMenu(void); 
-
 struct Input {
   const int code;
   boolean active; // for switches, this corresponds to the "up" position. For buttons, this corresponds to the "pressed" position
@@ -60,15 +55,9 @@ static Input INPUTS[NUM_INPUTS] = {
   {PD_2, false}, // BTN_1
   {PE_0, false}, // BTN_2
 };
-int FPS = 10;
 struct Input *lastUpdatedInput;
 
-char upArrow[] = {
-  0x20, 0x40, 0xFF, 0x40, 0x20  
-};
-char downArrow[] = {
-  0x04, 0x02, 0xFF, 0x02, 0x04  
-};
+int FPS = 10;
 
 struct point {
   int x;
@@ -110,12 +99,7 @@ struct Segment *current = NULL;
 boolean snakeIsGrowing = false;
 boolean snakeIsDead = false;
 
-const int X_BOUND_LEFT=0;
-const int X_BOUND_RIGHT=127;
-const int Y_BOUND_TOP=0;
-const int Y_BOUND_BOTTOM=31;
-
-char world[Y_BOUND_BOTTOM+1][X_BOUND_RIGHT+1] = {0};
+char world[crowOledMax][ccolOledMax] = {0};
 
 enum direction {
   UP,
@@ -125,99 +109,165 @@ enum direction {
 } direction=RIGHT;
 
 float pitchOffset = 0, rollOffset = 0;
-float LSBperG = 128.0;
+//////////////////////////////////// SCREENS ////////////////////////////////////////
+/////// Main Menu ////////////
+struct Screen *mainMenuScreen;
 
-enum Screen {
-  GAME, MAIN_MENU, SETTINGS, DEATH, CALIBRATE, DEATH_TRANSITION 
-} screen = MAIN_MENU;
-
-char *scrollingMenuOptions[5] = {'\0'};
-int numScrollingMenuOptions = 0;
-char *scrollingMenuTitle = "";
-char *deathOptions[] = {"try again", "give up"};
-char *settingsOptions[] = {"back to menu", "calibrate"};
 char *mainMenuOptions[] = {"play game", "settings"};
 
-void setup() {
-  WireInit();
-  delay(200);
-  
-  WireWriteRegister(0x1D, 0x2D, 1 << 3); // set standby in the POWER_CTL register
-  WireWriteRegister(0x1D, 0x31, 1); // set 10-bit res with 4g range
+void initMainMenuScreen(void) {
+  initScrollingMenu("main menu", mainMenuOptions, sizeof(mainMenuOptions)/sizeof(mainMenuOptions[0]));
+}
+void runMainMenuScreen(void) {
+  lastUpdatedInput = updateInputs();
+	if (lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
+		int optionIndex = getSelectedOptionIndex();
+		switch (optionIndex) {
+			case 0:
+				switchScreen(&gameScreen);
+				return;
+			case 1:
+				switchScreen(&settingsScreen);
+				return;
+		}
+	}
+	readAccelerometer(&pitch, &roll, pitchOffset, rollOffset);
+	scroll(pitch, roll);
+}
 
-  for (int i = 0; i < NUM_INPUTS; i ++) {
-    pinMode(INPUTS[i].code, INPUT);
+mainMenuScreen->init = initMainMenuScreen;
+mainMenuScreen->run = runMainMenuScreen;
+mainMenuScreen->end = NULL;
+/////// end Main Menu ///////////
+
+//////// Game ///////////////////
+struct Screen *gameScreen;
+
+void initGame(void) {
+  snakeIsGrowing = false;
+  snakeIsDead = false;
+
+  // count in
+  OrbitOledSetDrawMode(modOledSet);
+  char output[2];
+  for (int i = 10; i >= 1; i --) {
+    OrbitOledMoveTo(ccolOledMax/2,crowOledMax/2);
+    sprintf(output, "%d", i); 
+    OrbitOledDrawString(output);
+    OrbitOledUpdate();
+    if (i >= 7)
+      delay(1000);
+    else if (i >= 1)
+      delay(35);
+    OrbitOledClear();
   }
-  pinMode(GREEN_LED, OUTPUT);
 
-  initializeOLED();
-  
+  direction = RIGHT;
+
+  (void) memset(world, 0, (ccolOledMax)*(crowOledMax)*sizeof(char));
+  initializeSnake(points, NUM_POINTS); 
+
+  for (int i = 11; i <= 20; i ++) {
+    world[i][11] = 1; 
+    drawPixel(11, i);
+  }
+  world[11][12] = 1;
+  drawPixel(12, 11);
+  world[20][12] = 1;
+  drawPixel(12, 20);
+
+  for (int i = 11; i <= 20; i ++) {
+    world[i][ccolOledMax-11] = 1; 
+    drawPixel(ccolOledMax-11, i);
+  }
+  world[11][ccolOledMax-12] = 1;
+  drawPixel(ccolOledMax-12, 11);
+  world[20][ccolOledMax-12] = 1;
+  drawPixel(ccolOledMax-12, 20);
+
+  food.width = 3;
+  food.height = 3;
+  randomSeed(analogRead(0));
+  generateFood();
+}
+
+
+void runGameScreen(void) {
+  lastUpdatedInput = updateInputs();
+  switch(lastUpdatedInput->code) {
+    case PF_0:
+      zeroAccelerometer();
+      break;
+    case PE_0:
+      if (lastUpdatedInput->active)
+        switchScreen(&mainMenuScreen);
+      return;
+  }
+
+  updateDirection();
+  moveSnake();
+
+  if (snakeIsDead) {
+    switchScreen(&deathTransitionScreen);
+    return;
+  }
   OrbitOledUpdate();
-
-  initScreen();
-
-  Serial.begin(9600);
 }
 
-void initScreen() {
-  switch(screen) {
-    case GAME:
-      initGame();
-      break;
-    case MAIN_MENU:
-      initMainMenu();
-      break;
-    case SETTINGS:
-      initSettings();
-      break;
-    case DEATH:
-      initDeath();
-      break;
-    case CALIBRATE:
-      initCalibrate();
-      break;
+void endGame(void) {
+  // free each node forming the snake's linked list
+  current = head;
+  while (current && current->prev) {
+    current = current->prev;
+    free(current->next);
   }
-}
-void endScreen() {
-  switch(screen) {
-    case GAME:
-      endGame();
-      break;
-  }
-  OrbitOledClear();
+  free(current);
+
+  tail = head = NULL;
 }
 
-void switchScreen(enum Screen newScreen) {
-  endScreen();
-  screen = newScreen;
-  initScreen();
+gameScreen->init = initGameScreen;
+gameScreen->run = runGameScreen;
+gameScreen->end = endGameScreen;
+/////////////////////// end Game /////////////////////
+
+///////////////// Settings ///////////////////////////
+struct Screen *settingsScreen;
+
+char *settingsOptions[] = {"back to menu", "calibrate"};
+
+void initSettings(void) {
+  initScrollingMenu("settings", settingsOptions, sizeof(settingsOptions)/sizeof(settingsOptions[0]));
 }
 
-void loop() {
-  switch(screen) {
-    case GAME:
-      runGame();
-      break;
-    case MAIN_MENU:
-      runMainMenu();
-      break;
-    case SETTINGS:
-      runSettings();
-      break;
-    case DEATH:
-      runDeath();
-      break;
-    case DEATH_TRANSITION:
-      runDeathTransition();
-      break;
-    case CALIBRATE:
-      runCalibrate();
-      break;
-  }
-  DelayMs(1000/FPS);
+void runSettings(void) {
+  lastUpdatedInput = updateInputs();
+	if (lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
+		int optionIndex = getSelectedOptionIndex();
+		switch (optionIndex) {
+			case 0:
+				switchScreen(&mainMenuScreen);
+				return;
+			case 1:
+				switchScreen(&calibrateScreen);
+				return;
+		}
+	}
+	readAccelerometer(&pitch, &roll, pitchOffset, rollOffset);
+	scroll(pitch, roll);
 }
+settingScreen->init = initSettings;
+settingScreen->run = runSettings;
+settingScreen->end = NULL;
+/////////////////// end Settings ////////////////
 
-void runDeathTransition() {
+//////////////////////// Death //////////////////
+struct Screen *deathScreen;
+
+char *deathOptions[] = {"try again", "give up"};
+
+void initDeathScreen(void) {
+
   OrbitOledSetDrawMode(modOledSet);
   OrbitOledMoveTo(10, 10);
   OrbitOledDrawString("You died!");
@@ -228,25 +278,36 @@ void runDeathTransition() {
   OrbitOledDrawString("... pathetic");
   OrbitOledUpdate();
   delay(1500);
-  switchScreen(DEATH);
-}
+	OrbitOledClear();
 
-void initDeath(void) {
   initScrollingMenu("The void", deathOptions, sizeof(deathOptions)/sizeof(deathOptions[0]));
 }
-void runDeath(void) {
-  int optionIndex = runScrollingMenu();
-  switch (optionIndex) {
-    case 0:
-      switchScreen(GAME);
-      return;
-    case 1:
-      switchScreen(MAIN_MENU);
-      return;
-  }
+void runDeathScreen(void) {
+  lastUpdatedInput = updateInputs();
+	if (lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
+		int optionIndex = getSelectedOptionIndex();
+		switch (optionIndex) {
+			case 0:
+				switchScreen(&gameScreen);
+				return;
+			case 1:
+				switchScreen(&mainMenuScreen);
+				return;
+		}
+	}
+	readAccelerometer(&pitch, &roll, pitchOffset, rollOffset);
+	scroll(pitch, roll);
 }
 
-void initCalibrate() {
+deathScreen->init = initDeathScreen;
+deathScreen->run = runDeathScreen;
+deathScreen->end = NULL;
+///////////////////// end Death //////////////
+
+/////////////////// Calibrate ///////////////
+struct Screen *calibrateScreen;
+
+void initCalibrateScreen() {
   OrbitOledSetDrawMode(modOledSet);
   OrbitOledMoveTo(0, 0);
   OrbitOledDrawString("Orient the board");
@@ -254,7 +315,8 @@ void initCalibrate() {
   OrbitOledDrawString("& Press BTN1");
   OrbitOledUpdate();
 }
-void runCalibrate() {
+
+void runCalibrateScreen() {
   lastUpdatedInput = updateInputs();
   switch(lastUpdatedInput->code) {
     case PD_2:
@@ -273,121 +335,41 @@ void runCalibrate() {
   }
 }
 
-void runSettings(void) {
-  int optionIndex = runScrollingMenu();
-  switch (optionIndex) {
-    case 0:
-      switchScreen(MAIN_MENU);
-      return;
-    case 1:
-      switchScreen(CALIBRATE);
-      return;
-  }
-}
-void initSettings(void) {
-  initScrollingMenu("settings", settingsOptions, sizeof(settingsOptions)/sizeof(settingsOptions[0]));
-}
+calibrateScreen->init = initCalibrateScreen; 
+calibrateScreen->run = runCalibrateScreen; 
+calibrateScreen->end = NULL; 
+/////////////////// end Calibrate //////////
+//////////////////////////////END SCREENS///////////////////////////////////////////
 
-void runGame(void) {
-  lastUpdatedInput = updateInputs();
-  switch(lastUpdatedInput->code) {
-    case PF_0:
-      zeroAccelerometer();
-      break;
-    case PE_0:
-      if (lastUpdatedInput->active)
-        switchScreen(MAIN_MENU);
-      return;
-  }
+void setup() {
+  WireInit();
+  delay(200);
+  
+  WireWriteRegister(0x1D, 0x2D, 1 << 3); // set standby in the POWER_CTL register
+  WireWriteRegister(0x1D, 0x31, 1); // set 10-bit res with 4g range
 
-  updateDirection();
-  moveSnake();
+  for (int i = 0; i < NUM_INPUTS; i ++) {
+    pinMode(INPUTS[i].code, INPUT);
+  
+  pinMode(GREEN_LED, OUTPUT);
 
-  if (snakeIsDead) {
-    switchScreen(DEATH_TRANSITION);
-    return;
-  }
+  initializeOLED();
+  
   OrbitOledUpdate();
+
+	switchScreen(&mainMenuScreen);
+
+  Serial.begin(9600);
 }
 
-int offset = 12;
-void initScrollingMenu(char *newTitle, char *newOptions[], int numOptions) {
-  offset = 12;
-  scrollingMenuTitle = newTitle;
-  for (int i = 0; i < numOptions; i ++) {
-    scrollingMenuOptions[i] = newOptions[i];
-  }
-  numScrollingMenuOptions = numOptions;
-  drawScrollingMenu();
+void loop() {
+	runScreen();
+  DelayMs(1000/FPS);
 }
 
-int runScrollingMenu() {
-  lastUpdatedInput = updateInputs();
-  switch(lastUpdatedInput->code) {
-    case PD_2:
-      if (lastUpdatedInput->active) {
-        // words are 7 tall and have padding of 4, so 3 to 3, next is 7 to 13, then 17 to 23 // and midpoints become 0, 10, 20...
-        if ((abs(offset-12)+3)%10 <= 6)
-          return (abs(offset-12)+3)/10;
-      }
-    break;
-  }
-
-  float pitch, roll;
-  readAccelerometer(&pitch, &roll, pitchOffset, rollOffset);
-  if (fabs(roll) > 7) {
-    if (roll > 0) {
-      if (offset-12 < 3) {
-        offset ++;
-        drawScrollingMenu();
-      }
-    }
-    else if (offset-12 > - (numScrollingMenuOptions-1)*10 - 3) {
-      offset --;
-      drawScrollingMenu();
-    }
-  }
-  return -1;
-}
-
-void drawScrollingMenu() {
-    OrbitOledClear();
-    OrbitOledSetDrawMode(modOledSet);
-    for (int i = 0; i < numScrollingMenuOptions; i ++) {
-      OrbitOledMoveTo(10, offset+i*10);
-      OrbitOledDrawString(scrollingMenuOptions[i]);
-    }
-    OrbitOledMoveTo(0, 0);
-    OrbitOledFillRect(X_BOUND_RIGHT, 9);
-    OrbitOledMoveTo(0, Y_BOUND_BOTTOM-9);
-    OrbitOledFillRect(X_BOUND_RIGHT, Y_BOUND_BOTTOM);
-
-    OrbitOledSetDrawMode(modOledXor);
-    OrbitOledMoveTo(0,1);
-    OrbitOledDrawString(scrollingMenuTitle);
-
-    OrbitOledMoveTo(X_BOUND_RIGHT-6, 1);
-    OrbitOledPutBmp(5, 8, upArrow);
-    OrbitOledMoveTo(X_BOUND_RIGHT-6, Y_BOUND_BOTTOM-8);
-    OrbitOledPutBmp(5, 8, downArrow);
-    OrbitOledUpdate();
-}
-
-void runMainMenu(void) {
-  int optionIndex = runScrollingMenu();
-  switch (optionIndex) {
-    case 0:
-      switchScreen(GAME);
-      return;
-    case 1:
-      switchScreen(SETTINGS);
-      return;
-  }
-}
-void initMainMenu(void) {
-  initScrollingMenu("main menu", mainMenuOptions, sizeof(mainMenuOptions)/sizeof(mainMenuOptions[0]));
-}
-
+/*
+* Stores the current pitch and roll as offsets for future readings
+*/
 void zeroAccelerometer(void) {
   readAccelerometer(&pitchOffset, &rollOffset, 0,0);
 }
@@ -407,9 +389,10 @@ void readAccelerometer(float *pitch, float *roll, float pitchOffset, float rollO
     uint16_t yi = (data[3] << 8) | data[2];
     uint16_t zi = (data[5] << 8) | data[4];
     
-    float x = *(int16_t*)(&xi); // LSBperG
-    float y = *(int16_t*)(&yi); // LSBperG
-    float z = *(int16_t*)(&zi); // LSBperG
+		// the acceleration data should be in signed int form (unsigned hides negatives)
+    float x = *(int16_t*)(&xi); 
+    float y = *(int16_t*)(&yi);
+    float z = *(int16_t*)(&zi);
 
     *pitch += (atan2(x,sqrt(y*y+z*z)) * 180.0) / PI;
     *roll += (atan2(y,sqrt(x*x+z*z)) * 180.0) / PI;
@@ -546,17 +529,17 @@ void moveSnake() {
     head = current;
   }
 
-  if (head->coords.x > X_BOUND_RIGHT) {
+  if (head->coords.x >= ccolOledMax) {
     head->coords.x = 0;
   }
-  else if (head->coords.x < X_BOUND_LEFT) {
-    head->coords.x = X_BOUND_RIGHT-1;
+  else if (head->coords.x < 0) {
+    head->coords.x = ccolOledMax;
   }
-  if (head->coords.y > Y_BOUND_BOTTOM) {
+  if (head->coords.y >= crowOledMax) {
     head->coords.y = 0;
   }
-  if (head->coords.y < Y_BOUND_TOP) {
-    head->coords.y = Y_BOUND_BOTTOM-1;
+  if (head->coords.y < 0) {
+    head->coords.y = crowOledMax-1;
   }
 
   if (world[head->coords.y][head->coords.x] == 1) {
@@ -609,65 +592,6 @@ void initializeOLED(void) {
   OrbitOledSetFillPattern(OrbitOledGetStdPattern(iptnSolid));
 }
 
-void endGame(void) {
-  // free each node forming the snake's linked list
-  current = head;
-  while (current && current->prev) {
-    current = current->prev;
-    free(current->next);
-  }
-  free(current);
-
-  tail = head = NULL;
-}
-void initGame(void) {
-  snakeIsGrowing = false;
-  snakeIsDead = false;
-
-  // count in
-  OrbitOledSetDrawMode(modOledSet);
-  char output[2];
-  for (int i = 10; i >= 1; i --) {
-    OrbitOledMoveTo(X_BOUND_RIGHT/2,Y_BOUND_BOTTOM/2);
-    sprintf(output, "%d", i); 
-    OrbitOledDrawString(output);
-    OrbitOledUpdate();
-    if (i >= 7)
-      delay(1000);
-    else if (i >= 1)
-      delay(35);
-    OrbitOledClear();
-  }
-
-  direction = RIGHT;
-
-  (void) memset(world, 0, (X_BOUND_RIGHT+1)*(Y_BOUND_BOTTOM+1)*sizeof(char));
-  initializeSnake(points, NUM_POINTS); 
-
-  for (int i = 11; i <= 20; i ++) {
-    world[i][11] = 1; 
-    drawPixel(11, i);
-  }
-  world[11][12] = 1;
-  drawPixel(12, 11);
-  world[20][12] = 1;
-  drawPixel(12, 20);
-
-  for (int i = 11; i <= 20; i ++) {
-    world[i][X_BOUND_RIGHT-11] = 1; 
-    drawPixel(X_BOUND_RIGHT-11, i);
-  }
-  world[11][X_BOUND_RIGHT-12] = 1;
-  drawPixel(X_BOUND_RIGHT-12, 11);
-  world[20][X_BOUND_RIGHT-12] = 1;
-  drawPixel(X_BOUND_RIGHT-12, 20);
-
-  food.width = 3;
-  food.height = 3;
-  randomSeed(analogRead(0));
-  generateFood();
-}
-
 /*
  * Reads and updates all of the input states
  * Returns a pointer to the input which has just had its state changed
@@ -693,8 +617,8 @@ struct Input *updateInputs(void) {
 void generateFood(void) {
   // make sure the food does not spawn within the snake or within one pixel of an of its segments
   do {
-    food.coords.x = random(0, X_BOUND_RIGHT-(food.width-1));
-    food.coords.y = random(0, Y_BOUND_BOTTOM-(food.height-1));
+    food.coords.x = random(0, ccolOledMax-food.width);
+    food.coords.y = random(0, crowOledMax-food.height);
   } while (!validateFoodLocation());
 
   for (int y = food.coords.y; y < food.coords.y+food.height; y ++) {
@@ -709,8 +633,8 @@ void generateFood(void) {
 * return true if no intersections were found; Otherwise, return false
 */
 boolean validateFoodLocation(void) {
-  for (int y = food.coords.y - (food.coords.y == Y_BOUND_TOP ? 0 : 1); y < food.coords.y + food.height + (food.coords.y+food.height-1 == Y_BOUND_BOTTOM ? 0 : 1); y ++) {
-    for (int x = food.coords.x - (food.coords.x == X_BOUND_LEFT ? 0: 1);  x < food.coords.x + food.width + (food.coords.x+food.width-1 == X_BOUND_RIGHT ? 0 : 1);  x ++) {
+  for (int y = food.coords.y - (food.coords.y == 0 ? 0 : 1); y <= food.coords.y + food.height && y < crowOledMax; y ++) {
+    for (int x = food.coords.x - (food.coords.x == 0 ? 0: 1);  x <= food.coords.x + food.width && x < ccolOledMax;  x ++) {
       if (world[y][x] == 1) {
         return false;
       }
@@ -718,5 +642,3 @@ boolean validateFoodLocation(void) {
   }
   return true;
 }
-
-
