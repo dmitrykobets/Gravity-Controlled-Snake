@@ -143,6 +143,7 @@ void runMainMenuScreen(void) {
 void initGameScreen(void) {
   snakeIsGrowing = false;
   snakeIsDead = false;
+  gameIsWon = false;
 
   // count in
   OrbitOledSetDrawMode(modOledSet);
@@ -289,16 +290,19 @@ void runDeathScreen(void) {
 char *winOptions[] = {"start again", "main menu"};
 
 void initWinScreen(void) {
-	OrbitOledMoveTo(0, 0);
+  // flash YOU WON! multiple times
 	for (int i = 0; i < 6; i ++) {
 		OrbitOledSetDrawMode(modOledSet);
 		if (i%2 == 0) {
+      OrbitOledMoveTo(0, 0);
 			OrbitOledFillRect(ccolOledMax-1, crowOledMax-1);
 			OrbitOledSetDrawMode(modOledXor);
 		}
 		OrbitOledMoveTo(10, crowOledMax/2-4);
 		OrbitOledDrawString("Winner!");
+    OrbitOledUpdate();
 		delay(700);
+    OrbitOledClear();
 	}
   initScrollingMenu("You won!", winOptions, sizeof(winOptions)/sizeof(winOptions[0]));
 }

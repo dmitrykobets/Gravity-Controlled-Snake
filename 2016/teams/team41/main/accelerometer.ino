@@ -46,33 +46,29 @@ void readAccelerometer(float pitchOffset, float rollOffset) {
 
   uint32_t data[6] = {0}; // instead of getting X0, X1, Y0, ... data separately, simply get all 6 bytes in one read. According to the specification, this removes the risk of the data in those registers changing between reads
 
-  //for (int i = 0; i < 5; i ++) {
-    WireWriteByte(ACCLADDR, 0x32); 
-    WireRequestArray(ACCLADDR, data, 6);
+  WireWriteByte(ACCLADDR, 0x32); 
+  WireRequestArray(ACCLADDR, data, 6);
 
-		// X0 is the LSB and X1 is the MSB, and the data is stored right-shifted, so arrange the bytes accordingly
-    uint16_t xi = (data[1] << 8) | data[0];
-    uint16_t yi = (data[3] << 8) | data[2];
-    uint16_t zi = (data[5] << 8) | data[4];
-    
-		// the acceleration data should be in signed form
-    float x = *(int16_t*)(&xi); 
-    float y = *(int16_t*)(&yi);
-    float z = *(int16_t*)(&zi);
+	// X0 is the LSB and X1 is the MSB, and the data is stored right-shifted, so arrange the bytes accordingly
+  uint16_t xi = (data[1] << 8) | data[0];
+  uint16_t yi = (data[3] << 8) | data[2];
+  uint16_t zi = (data[5] << 8) | data[4];
+  
+	// the acceleration data should be in signed form
+  float x = *(int16_t*)(&xi); 
+  float y = *(int16_t*)(&yi);
+  float z = *(int16_t*)(&zi);
 
-    x = x*ALPHA+(prevX*(1-ALPHA));
-    y = y*ALPHA+(prevY*(1-ALPHA));
-    z = z*ALPHA+(prevZ*(1-ALPHA));
+  x = x*ALPHA+(prevX*(1-ALPHA));
+  y = y*ALPHA+(prevY*(1-ALPHA));
+  z = z*ALPHA+(prevZ*(1-ALPHA));
 
-    prevX = x;
-    prevY = y;
-    prevZ = z;
+  prevX = x;
+  prevY = y;
+  prevZ = z;
 
-    pitch = (atan2(x,sqrt(y*y+z*z)) * 180.0) / M_PI;
-    roll = (atan2(y,sqrt(x*x+z*z)) * 180.0) / M_PI;
-  //}
-  //pitch /= 5;
-  //roll /= 5;
+  pitch = (atan2(x,sqrt(y*y+z*z)) * 180.0) / M_PI;
+  roll = (atan2(y,sqrt(x*x+z*z)) * 180.0) / M_PI;
 
   pitch -= pitchOffset;
   roll -= rollOffset;
