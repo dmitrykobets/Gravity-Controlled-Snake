@@ -92,6 +92,7 @@ struct SnakeSegment *tail = NULL;
 
 boolean snakeIsGrowing = false;
 boolean snakeIsDead = false;
+boolean gameIsWon = false;
 
 enum direction {
   UP,
@@ -113,6 +114,7 @@ struct Screen gameScreen;
 struct Screen settingsScreen;
 struct Screen deathScreen;
 struct Screen calibrateScreen;
+struct Screen winScreen;
 /////// Main Menu ////////////
 char *mainMenuOptions[] = {"play game", "settings"};
 
@@ -162,6 +164,7 @@ void initGameScreen(void) {
   (void) memset(world, 0, (ccolOledMax)*(crowOledMax)*sizeof(char));
   initSnake(points, NUM_POINTS); 
 
+	// draw obstacles for the snake
   for (int i = 11; i <= 20; i ++) {
     world[i][11] = 1; 
     drawPixel(11, i);
@@ -189,25 +192,21 @@ void initGameScreen(void) {
 
 void runGameScreen(void) {
   updateInputs();
-	if (lastUpdatedInput) {
-		switch(lastUpdatedInput->code) {
-			case PF_0:
-				zeroAccelerometer();
-				break;
-			case PE_0:
-				if (lastUpdatedInput->active)
-					switchScreen(&mainMenuScreen);
-				return;
-		}
-	}
-
+  if (lastUpdatedInput && lastUpdatedInput->code == PE_0 && lastUpdatedInput->active) {
+    switchScreen(&mainMenuScreen);
+    return;
+  }
+  
   updateDirection();
   moveSnake();
 
   if (snakeIsDead) {
     switchScreen(&deathScreen);
     return;
-  }
+  } else if (gameIsWon) {
+		switchScreen(&winScreen);
+		return;
+	}
   OrbitOledUpdate();
 }
 
@@ -286,6 +285,41 @@ void runDeathScreen(void) {
 }
 ///////////////////// end Death //////////////
 
+//////////////////////// Win //////////////////
+char *winOptions[] = {"start again", "main menu"};
+
+void initWinScreen(void) {
+	OrbitOledMoveTo(0, 0);
+	for (int i = 0; i < 6; i ++) {
+		OrbitOledSetDrawMode(modOledSet);
+		if (i%2 == 0) {
+			OrbitOledFillRect(ccolOledMax-1, crowOledMax-1);
+			OrbitOledSetDrawMode(modOledXor);
+		}
+		OrbitOledMoveTo(10, crowOledMax/2-4);
+		OrbitOledDrawString("Winner!");
+		delay(700);
+	}
+  initScrollingMenu("You won!", winOptions, sizeof(winOptions)/sizeof(winOptions[0]));
+}
+void runWinScreen(void) {
+  updateInputs();
+	if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
+		int optionIndex = getSelectedOptionIndex();
+		switch (optionIndex) {
+			case 0:
+				switchScreen(&gameScreen);
+				return;
+			case 1:
+				switchScreen(&mainMenuScreen);
+				return;
+		}
+	}
+	readAccelerometer(pitchOffset, rollOffset);
+	scroll(roll);
+}
+///////////////////// end Win //////////////
+
 /////////////////// Calibrate ///////////////
 void initCalibrateScreen() {
   OrbitOledSetDrawMode(modOledSet);
@@ -348,6 +382,11 @@ void setup() {
   deathScreen = {
     .init = initDeathScreen,
     .run = runDeathScreen,
+    .end = NULL
+  };
+  winScreen = {
+    .init = initWinScreen,
+    .run = runWinScreen,
     .end = NULL
   };
   calibrateScreen = {
@@ -561,10 +600,16 @@ void eraseFood(void) {
 
 void generateFood(void) {
   // make sure the food does not spawn within the snake or within one pixel of any of its segments
+	int spawnAttempts = 0;
   do {
     food.coords.x = random(0, ccolOledMax-food.width);
     food.coords.y = random(0, crowOledMax-food.height);
-  } while (!validateFoodLocation());
+		spawnAttempts ++;
+  } while (!validateFoodLocation() && spawnAttempts < 1000);
+	if (spawnAttempts >= 1000) {
+		gameIsWon = true;
+		return;
+	}
 
   for (int y = food.coords.y; y < food.coords.y+food.height; y ++) {
     for (int x = food.coords.x;  x < food.coords.x+food.width;  x ++) {
