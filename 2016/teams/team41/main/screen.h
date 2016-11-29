@@ -1,7 +1,11 @@
 #ifndef SCREEN_H
 #define SCREEN_H
 
-struct Screen;
+struct Screen {
+  void (*init)(void);
+  void (*run)(void);
+  void (*end)(void);
+};
 
 void initScreen(void);
 void endScreen(void);

@@ -11,9 +11,9 @@
 #include <stdio.h>
 #include <Wire.h>
 #include "Wire_Util.h"
-#include "screen.c"
-#include "scrolling_menu.c"
-#include "accelerometer.c"
+#include "screen.h"
+#include "scrolling_menu.h"
+#include "accelerometer.h"
 
 /*
 TODO:
@@ -101,6 +101,11 @@ enum direction {
 } direction=RIGHT;
 
 char world[crowOledMax][ccolOledMax] = {0};
+
+extern float pitchOffset;
+extern float rollOffset;
+extern float roll;
+extern float pitch;
 
 //////////////////////////////////// SCREENS ////////////////////////////////////////
 struct Screen mainMenuScreen;
