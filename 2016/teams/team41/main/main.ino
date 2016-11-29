@@ -123,19 +123,19 @@ void initMainMenuScreen(void) {
 }
 void runMainMenuScreen(void) {
   updateInputs();
-	if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
-		int optionIndex = getSelectedOptionIndex();
-		switch (optionIndex) {
-			case 0:
-				switchScreen(&gameScreen);
-				return;
-			case 1:
-				switchScreen(&settingsScreen);
-				return;
-		}
-	}
-	readAccelerometer(pitchOffset, rollOffset);
-	scroll(roll);
+  if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
+    int optionIndex = getSelectedOptionIndex();
+    switch (optionIndex) {
+      case 0:
+        switchScreen(&gameScreen);
+        return;
+      case 1:
+        switchScreen(&settingsScreen);
+        return;
+    }
+  }
+  readAccelerometer(pitchOffset, rollOffset);
+  scroll(roll);
 }
 /////// end Main Menu ///////////
 
@@ -165,7 +165,7 @@ void initGameScreen(void) {
   (void) memset(world, 0, (ccolOledMax)*(crowOledMax)*sizeof(char));
   initSnake(points, NUM_POINTS); 
 
-	// draw obstacles for the snake
+  // draw obstacles for the snake
   for (int i = 11; i <= 20; i ++) {
     world[i][11] = 1; 
     drawPixel(11, i);
@@ -205,9 +205,9 @@ void runGameScreen(void) {
     switchScreen(&deathScreen);
     return;
   } else if (gameIsWon) {
-		switchScreen(&winScreen);
-		return;
-	}
+    switchScreen(&winScreen);
+    return;
+  }
   OrbitOledUpdate();
 }
 
@@ -233,19 +233,19 @@ void initSettingsScreen(void) {
 
 void runSettingsScreen(void) {
   updateInputs();
-	if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
-		int optionIndex = getSelectedOptionIndex();
-		switch (optionIndex) {
-			case 0:
-				switchScreen(&mainMenuScreen);
-				return;
-			case 1:
-				switchScreen(&calibrateScreen);
-				return;
-		}
-	}
-	readAccelerometer(pitchOffset, rollOffset);
-	scroll(roll);
+  if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
+    int optionIndex = getSelectedOptionIndex();
+    switch (optionIndex) {
+      case 0:
+        switchScreen(&mainMenuScreen);
+        return;
+      case 1:
+        switchScreen(&calibrateScreen);
+        return;
+    }
+  }
+  readAccelerometer(pitchOffset, rollOffset);
+  scroll(roll);
 }
 /////////////////// end Settings ////////////////
 
@@ -264,25 +264,25 @@ void initDeathScreen(void) {
   OrbitOledDrawString("... pathetic");
   OrbitOledUpdate();
   delay(1500);
-	OrbitOledClear();
+  OrbitOledClear();
 
   initScrollingMenu("The void", deathOptions, sizeof(deathOptions)/sizeof(deathOptions[0]));
 }
 void runDeathScreen(void) {
   updateInputs();
-	if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
-		int optionIndex = getSelectedOptionIndex();
-		switch (optionIndex) {
-			case 0:
-				switchScreen(&gameScreen);
-				return;
-			case 1:
-				switchScreen(&mainMenuScreen);
-				return;
-		}
-	}
-	readAccelerometer(pitchOffset, rollOffset);
-	scroll(roll);
+  if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
+    int optionIndex = getSelectedOptionIndex();
+    switch (optionIndex) {
+      case 0:
+        switchScreen(&gameScreen);
+        return;
+      case 1:
+        switchScreen(&mainMenuScreen);
+        return;
+    }
+  }
+  readAccelerometer(pitchOffset, rollOffset);
+  scroll(roll);
 }
 ///////////////////// end Death //////////////
 
@@ -291,36 +291,36 @@ char *winOptions[] = {"start again", "main menu"};
 
 void initWinScreen(void) {
   // flash YOU WON! multiple times
-	for (int i = 0; i < 6; i ++) {
-		OrbitOledSetDrawMode(modOledSet);
-		if (i%2 == 0) {
+  for (int i = 0; i < 6; i ++) {
+    OrbitOledSetDrawMode(modOledSet);
+    if (i%2 == 0) {
       OrbitOledMoveTo(0, 0);
-			OrbitOledFillRect(ccolOledMax-1, crowOledMax-1);
-			OrbitOledSetDrawMode(modOledXor);
-		}
-		OrbitOledMoveTo(10, crowOledMax/2-4);
-		OrbitOledDrawString("Winner!");
+      OrbitOledFillRect(ccolOledMax-1, crowOledMax-1);
+      OrbitOledSetDrawMode(modOledXor);
+    }
+    OrbitOledMoveTo(10, crowOledMax/2-4);
+    OrbitOledDrawString("Winner!");
     OrbitOledUpdate();
-		delay(700);
+    delay(700);
     OrbitOledClear();
-	}
+  }
   initScrollingMenu("You won!", winOptions, sizeof(winOptions)/sizeof(winOptions[0]));
 }
 void runWinScreen(void) {
   updateInputs();
-	if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
-		int optionIndex = getSelectedOptionIndex();
-		switch (optionIndex) {
-			case 0:
-				switchScreen(&gameScreen);
-				return;
-			case 1:
-				switchScreen(&mainMenuScreen);
-				return;
-		}
-	}
-	readAccelerometer(pitchOffset, rollOffset);
-	scroll(roll);
+  if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
+    int optionIndex = getSelectedOptionIndex();
+    switch (optionIndex) {
+      case 0:
+        switchScreen(&gameScreen);
+        return;
+      case 1:
+        switchScreen(&mainMenuScreen);
+        return;
+    }
+  }
+  readAccelerometer(pitchOffset, rollOffset);
+  scroll(roll);
 }
 ///////////////////// end Win //////////////
 
@@ -336,20 +336,20 @@ void initCalibrateScreen() {
 
 void runCalibrateScreen() {
   updateInputs();
-	if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
-		if (lastUpdatedInput->active) {
-			OrbitOledClear();
-			OrbitOledMoveTo(0,0);
-			OrbitOledDrawString("Calibrating...");
-			OrbitOledUpdate();
-			digitalWrite(GREEN_LED, HIGH);
-			zeroAccelerometer();
-			delay(1000);
-			digitalWrite(GREEN_LED, LOW);
-			switchScreen(&settingsScreen);
-			return;
-		}
-	}
+  if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
+    if (lastUpdatedInput->active) {
+      OrbitOledClear();
+      OrbitOledMoveTo(0,0);
+      OrbitOledDrawString("Calibrating...");
+      OrbitOledUpdate();
+      digitalWrite(GREEN_LED, HIGH);
+      zeroAccelerometer();
+      delay(1000);
+      digitalWrite(GREEN_LED, LOW);
+      switchScreen(&settingsScreen);
+      return;
+    }
+  }
 }
 /////////////////// end Calibrate //////////
 //////////////////////////////END SCREENS///////////////////////////////////////////
@@ -358,7 +358,7 @@ void setup() {
   WireInit();
   delay(200);
  
- 	initAccelerometer();
+  initAccelerometer();
 
   for (int i = 0; i < NUM_INPUTS; i ++)
     pinMode(INPUTS[i].code, INPUT);
@@ -399,13 +399,14 @@ void setup() {
     .end = NULL
   };
   
-	switchScreen(&mainMenuScreen);
+	updateInputs();
+  switchScreen(&mainMenuScreen);
 
   Serial.begin(9600);
 }
 
 void loop() {
-	runScreen();
+  runScreen();
   DelayMs(1000/FPS);
 }
 
@@ -417,7 +418,7 @@ void loop() {
  * Return values: none
  */
 void updateInputs(void) {
-	lastUpdatedInput = NULL;
+  lastUpdatedInput = NULL;
   for (int i = 0; i < NUM_INPUTS; i ++) {
     int active = digitalRead(INPUTS[i].code);
     if (active != INPUTS[i].active) {
@@ -504,7 +505,7 @@ void updateDirection(void) {
  * Return values: none
  */
 void moveSnake(void) {
-	// grow the snake by 2 pixels at a time
+  // grow the snake by 2 pixels at a time
   if (snakeIsGrowing) {
     switch(direction) {
       case LEFT:
@@ -561,7 +562,7 @@ void moveSnake(void) {
     head = current;
   }
 
-	// wrap around the screen
+  // wrap around the screen
   if (head->coords.x >= ccolOledMax) {
     head->coords.x = 0;
   }
@@ -585,8 +586,8 @@ void moveSnake(void) {
     }
     drawPixel(&(head->coords));
     world[head->coords.y][head->coords.x] = 1;
-		
-		// food is generated after the snake has been drawn so that it does not intersect with the snake
+    
+    // food is generated after the snake has been drawn so that it does not intersect with the snake
     if (snakeIsGrowing) {
       generateFood();
     } 
@@ -604,16 +605,16 @@ void eraseFood(void) {
 
 void generateFood(void) {
   // make sure the food does not spawn within the snake or within one pixel of any of its segments
-	int spawnAttempts = 0;
+  int spawnAttempts = 0;
   do {
     food.coords.x = random(0, ccolOledMax-food.width);
     food.coords.y = random(0, crowOledMax-food.height);
-		spawnAttempts ++;
+    spawnAttempts ++;
   } while (!validateFoodLocation() && spawnAttempts < 1000);
-	if (spawnAttempts >= 1000) {
-		gameIsWon = true;
-		return;
-	}
+  if (spawnAttempts >= 1000) {
+    gameIsWon = true;
+    return;
+  }
 
   for (int y = food.coords.y; y < food.coords.y+food.height; y ++) {
     for (int x = food.coords.x;  x < food.coords.x+food.width;  x ++) {
@@ -663,3 +664,4 @@ void erasePixel(int x, int y) {
 void erasePixel(struct point* point) {
   erasePixel(point->x, point->y);
 }
+
