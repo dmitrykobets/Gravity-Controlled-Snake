@@ -1,8 +1,9 @@
 #ifndef SCREEN_H
 #define SCREEN_H
 
-void initScrollingMenu(char *newTitle, char *newOptions[], int numOptions);
+void initScrollingMenu(char *, char*[], int);
 void drawScrollingMenu(void);
 int getSelectedOptionIndex(void);
-int scroll(float pitch, float roll);
+void scroll(float);
+
 #endif SCREEN_H

@@ -1,4 +1,3 @@
-#include <Wire.h>
 
 void WireWriteByte(int, uint8_t);
 void WireWriteRegister(int address, uint8_t reg, uint8_t value);

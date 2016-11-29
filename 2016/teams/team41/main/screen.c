@@ -1,5 +1,3 @@
-#include "Screen.h"
-#include <OrbitOled.c>
 
 struct Screen {
 	void (*init)(void);
@@ -22,7 +20,7 @@ void runScreen(void) {
 		curScreen->run();
 }
 void switchScreen(struct Screen *newScreen) {
-	endScreen(curScreen);
-	initScreen(newScreen);
+	endScreen();
+	initScreen();
 	curScreen = newScreen;
 }

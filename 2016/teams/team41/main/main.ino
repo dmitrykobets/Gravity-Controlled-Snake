@@ -13,51 +13,49 @@
 #include "Wire_Util.h"
 #include "screen.c"
 #include "scrolling_menu.c"
+#include "accelerometer.c"
 
 /*
 TODO:
-fix global variables vs local variables created in each loop() call... for example: lastUpdatedInput.
-coords are being copied around instead of being kept as pointers
 change food spawn algorithm to detect when it's impossible to spawn food (game is over) and minimize random attempts (so basically make it not entirely random
+separate scrolling menu from input and accelerometer logic (not too big of a deal)
+
+see if can added a low-pass filter to the data instead of taking an average of 5 readings
+see if can change the data array in accelerometer.c to be of type uint16_t
 */
 
-void onButtonDown(void);
-void initializeOLED(void);
+void updateInputs(void); 
 
-struct Input *updateInputs(void); 
-
+void initSnake(struct point[], int);
 void appendToHead(struct point*);
 void appendToHead(int,int);
-void initializeSnake(struct point[], int);
-
-void drawPixel(int,int);
-void erasePixel(int,int);
-void drawPixel(struct point*);
-void erasePixel(struct point*);
-
-boolean validateFoodLocation(void);
-void eraseFood(void);
-
-int genRandNum(int n);
-
 void updateDirection(void); 
-void zeroAccelerometer(void);
-void readAccelerometer(float*,float*,float,float);
+void moveSnake(void);
+
+void eraseFood(void);
+void generateFood(void);
+boolean validateFoodLocation(void);
+
+void initOLED(void);
+void drawPixel(struct point*);
+void drawPixel(int,int);
+void erasePixel(struct point*);
+void erasePixel(int,int);
+
+int FPS = 10;
 
 struct Input {
   const int code;
   boolean active; // for switches, this corresponds to the "up" position. For buttons, this corresponds to the "pressed" position
 };
+struct Input *lastUpdatedInput = NULL;
 
 const int NUM_INPUTS = 3;
-static Input INPUTS[NUM_INPUTS] = {
+struct Input INPUTS[NUM_INPUTS] = {
   {PF_0, false}, // SW_1
   {PD_2, false}, // BTN_1
   {PE_0, false}, // BTN_2
 };
-struct Input *lastUpdatedInput;
-
-int FPS = 10;
 
 struct point {
   int x;
@@ -70,13 +68,10 @@ struct food {
   int height;
 } food;
 
-/*
- * Snake components
- */
-struct Segment {
+struct SnakeSegment {
   struct point coords;
-  struct Segment *next; // towards head
-  struct Segment *prev; // towards tail
+  struct SnakeSegment *next; // towards head
+  struct SnakeSegment *prev; // towards tail
 };
 const int NUM_POINTS = 10;
 struct point points[NUM_POINTS] = {
@@ -92,14 +87,11 @@ struct point points[NUM_POINTS] = {
     {25, 15}, 
 };
 
-struct Segment *head = NULL;
-struct Segment *tail = NULL;
-struct Segment *current = NULL;
+struct SnakeSegment *head = NULL;
+struct SnakeSegment *tail = NULL;
 
 boolean snakeIsGrowing = false;
 boolean snakeIsDead = false;
-
-char world[crowOledMax][ccolOledMax] = {0};
 
 enum direction {
   UP,
@@ -108,18 +100,22 @@ enum direction {
   RIGHT
 } direction=RIGHT;
 
-float pitchOffset = 0, rollOffset = 0;
-//////////////////////////////////// SCREENS ////////////////////////////////////////
-/////// Main Menu ////////////
-struct Screen *mainMenuScreen;
+char world[crowOledMax][ccolOledMax] = {0};
 
+//////////////////////////////////// SCREENS ////////////////////////////////////////
+struct Screen mainMenuScreen;
+struct Screen gameScreen;
+struct Screen settingsScreen;
+struct Screen deathScreen;
+struct Screen calibrateScreen;
+/////// Main Menu ////////////
 char *mainMenuOptions[] = {"play game", "settings"};
 
 void initMainMenuScreen(void) {
   initScrollingMenu("main menu", mainMenuOptions, sizeof(mainMenuOptions)/sizeof(mainMenuOptions[0]));
 }
 void runMainMenuScreen(void) {
-  lastUpdatedInput = updateInputs();
+  updateInputs();
 	if (lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
 		int optionIndex = getSelectedOptionIndex();
 		switch (optionIndex) {
@@ -131,19 +127,13 @@ void runMainMenuScreen(void) {
 				return;
 		}
 	}
-	readAccelerometer(&pitch, &roll, pitchOffset, rollOffset);
-	scroll(pitch, roll);
+	readAccelerometer(pitchOffset, rollOffset);
+	scroll(roll);
 }
-
-mainMenuScreen->init = initMainMenuScreen;
-mainMenuScreen->run = runMainMenuScreen;
-mainMenuScreen->end = NULL;
 /////// end Main Menu ///////////
 
 //////// Game ///////////////////
-struct Screen *gameScreen;
-
-void initGame(void) {
+void initGameScreen(void) {
   snakeIsGrowing = false;
   snakeIsDead = false;
 
@@ -165,7 +155,7 @@ void initGame(void) {
   direction = RIGHT;
 
   (void) memset(world, 0, (ccolOledMax)*(crowOledMax)*sizeof(char));
-  initializeSnake(points, NUM_POINTS); 
+  initSnake(points, NUM_POINTS); 
 
   for (int i = 11; i <= 20; i ++) {
     world[i][11] = 1; 
@@ -193,7 +183,7 @@ void initGame(void) {
 
 
 void runGameScreen(void) {
-  lastUpdatedInput = updateInputs();
+  updateInputs();
   switch(lastUpdatedInput->code) {
     case PF_0:
       zeroAccelerometer();
@@ -208,15 +198,15 @@ void runGameScreen(void) {
   moveSnake();
 
   if (snakeIsDead) {
-    switchScreen(&deathTransitionScreen);
+    switchScreen(&deathScreen);
     return;
   }
   OrbitOledUpdate();
 }
 
-void endGame(void) {
+void endGameScreen(void) {
   // free each node forming the snake's linked list
-  current = head;
+  struct SnakeSegment *current = head;
   while (current && current->prev) {
     current = current->prev;
     free(current->next);
@@ -225,23 +215,17 @@ void endGame(void) {
 
   tail = head = NULL;
 }
-
-gameScreen->init = initGameScreen;
-gameScreen->run = runGameScreen;
-gameScreen->end = endGameScreen;
 /////////////////////// end Game /////////////////////
 
 ///////////////// Settings ///////////////////////////
-struct Screen *settingsScreen;
-
 char *settingsOptions[] = {"back to menu", "calibrate"};
 
-void initSettings(void) {
+void initSettingsScreen(void) {
   initScrollingMenu("settings", settingsOptions, sizeof(settingsOptions)/sizeof(settingsOptions[0]));
 }
 
-void runSettings(void) {
-  lastUpdatedInput = updateInputs();
+void runSettingsScreen(void) {
+  updateInputs();
 	if (lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
 		int optionIndex = getSelectedOptionIndex();
 		switch (optionIndex) {
@@ -253,17 +237,12 @@ void runSettings(void) {
 				return;
 		}
 	}
-	readAccelerometer(&pitch, &roll, pitchOffset, rollOffset);
-	scroll(pitch, roll);
+	readAccelerometer(pitchOffset, rollOffset);
+	scroll(roll);
 }
-settingScreen->init = initSettings;
-settingScreen->run = runSettings;
-settingScreen->end = NULL;
 /////////////////// end Settings ////////////////
 
 //////////////////////// Death //////////////////
-struct Screen *deathScreen;
-
 char *deathOptions[] = {"try again", "give up"};
 
 void initDeathScreen(void) {
@@ -283,7 +262,7 @@ void initDeathScreen(void) {
   initScrollingMenu("The void", deathOptions, sizeof(deathOptions)/sizeof(deathOptions[0]));
 }
 void runDeathScreen(void) {
-  lastUpdatedInput = updateInputs();
+  updateInputs();
 	if (lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
 		int optionIndex = getSelectedOptionIndex();
 		switch (optionIndex) {
@@ -295,18 +274,12 @@ void runDeathScreen(void) {
 				return;
 		}
 	}
-	readAccelerometer(&pitch, &roll, pitchOffset, rollOffset);
-	scroll(pitch, roll);
+	readAccelerometer(pitchOffset, rollOffset);
+	scroll(roll);
 }
-
-deathScreen->init = initDeathScreen;
-deathScreen->run = runDeathScreen;
-deathScreen->end = NULL;
 ///////////////////// end Death //////////////
 
 /////////////////// Calibrate ///////////////
-struct Screen *calibrateScreen;
-
 void initCalibrateScreen() {
   OrbitOledSetDrawMode(modOledSet);
   OrbitOledMoveTo(0, 0);
@@ -317,7 +290,7 @@ void initCalibrateScreen() {
 }
 
 void runCalibrateScreen() {
-  lastUpdatedInput = updateInputs();
+  updateInputs();
   switch(lastUpdatedInput->code) {
     case PD_2:
       if (lastUpdatedInput->active) {
@@ -329,34 +302,54 @@ void runCalibrateScreen() {
         zeroAccelerometer();
         delay(1000);
         digitalWrite(GREEN_LED, LOW);
-        switchScreen(SETTINGS);
+        switchScreen(&settingsScreen);
         return;
       }
   }
 }
-
-calibrateScreen->init = initCalibrateScreen; 
-calibrateScreen->run = runCalibrateScreen; 
-calibrateScreen->end = NULL; 
 /////////////////// end Calibrate //////////
 //////////////////////////////END SCREENS///////////////////////////////////////////
 
 void setup() {
   WireInit();
   delay(200);
-  
-  WireWriteRegister(0x1D, 0x2D, 1 << 3); // set standby in the POWER_CTL register
-  WireWriteRegister(0x1D, 0x31, 1); // set 10-bit res with 4g range
+ 
+ 	initAccelerometer();
 
-  for (int i = 0; i < NUM_INPUTS; i ++) {
+  for (int i = 0; i < NUM_INPUTS; i ++)
     pinMode(INPUTS[i].code, INPUT);
-  
   pinMode(GREEN_LED, OUTPUT);
 
-  initializeOLED();
+  initOLED();
   
   OrbitOledUpdate();
 
+  mainMenuScreen = {
+    .init = initMainMenuScreen,
+    .run = runMainMenuScreen,
+    .end = NULL
+  };
+  gameScreen = {
+    .init = initGameScreen,
+    .run = runGameScreen,
+    .end = endGameScreen
+  };
+  settingsScreen = {
+    .init = initSettingsScreen,
+    .run = runSettingsScreen,
+    .end = NULL
+  };
+  deathScreen = {
+    .init = initDeathScreen,
+    .run = runDeathScreen,
+    .end = NULL
+  };
+  calibrateScreen = {
+    .init = initCalibrateScreen,
+    .run = runCalibrateScreen,
+    .end = NULL
+  };
+  
 	switchScreen(&mainMenuScreen);
 
   Serial.begin(9600);
@@ -367,49 +360,61 @@ void loop() {
   DelayMs(1000/FPS);
 }
 
-/*
-* Stores the current pitch and roll as offsets for future readings
-*/
-void zeroAccelerometer(void) {
-  readAccelerometer(&pitchOffset, &rollOffset, 0,0);
-}
-/* 
-* Reads accelerometer x, y, z data and compute pitch and roll.
-*/ 
-void readAccelerometer(float *pitch, float *roll, float pitchOffset, float rollOffset) {
-
-  uint32_t data[6] = {0}; // instead of getting X0, X1, Y0, ... data separately, simply get all 6 bytes in one read. According to the specification, this removes the risk
-                          // of the data in those registers changing between access calls
-
-  for (int i = 0; i < 5; i ++) {
-    WireWriteByte(0x1D, 0x32); //
-    WireRequestArray(0x1D, data, 6);
-
-    uint16_t xi = (data[1] << 8) | data[0];
-    uint16_t yi = (data[3] << 8) | data[2];
-    uint16_t zi = (data[5] << 8) | data[4];
-    
-		// the acceleration data should be in signed int form (unsigned hides negatives)
-    float x = *(int16_t*)(&xi); 
-    float y = *(int16_t*)(&yi);
-    float z = *(int16_t*)(&zi);
-
-    *pitch += (atan2(x,sqrt(y*y+z*z)) * 180.0) / PI;
-    *roll += (atan2(y,sqrt(x*x+z*z)) * 180.0) / PI;
+/* Function: updateInputs
+ * ---------------------
+ * Update input states. The last input in the list to be updated is assigned to 
+ * the "lastUpdatedInput" pointer.
+ * Parameters: none
+ * Return values: none
+ */
+void updateInputs(void) {
+  for (int i = 0; i < NUM_INPUTS; i ++) {
+    int active = digitalRead(INPUTS[i].code);
+    if (active != INPUTS[i].active) {
+      INPUTS[i].active = active;
+      lastUpdatedInput = &(INPUTS[i]);
+    }
   }
-  *pitch /= 5;
-  *roll /= 5;
-
-  *pitch -= pitchOffset;
-  *roll -= rollOffset;
 }
 
-/*
-* Read accelerometer data and return the snake's updated direction based on the pitch & roll of the accelerometer
-*/
+void initSnake(struct point coords[], int numCoords) {
+  for (int i = 0; i < numCoords; i ++) {
+    appendToHead(&(coords[i]));
+    world[coords[i].y][coords[i].x] = 1;
+    drawPixel(&(coords[i]));
+  }
+}
+
+void appendToHead(int x, int y) {
+  struct point newPoint = {x, y};
+  appendToHead(&newPoint);
+}
+
+void appendToHead(struct point *coords) {
+  struct SnakeSegment* newHead = (struct SnakeSegment*) malloc(sizeof(struct SnakeSegment));
+  newHead->coords = *coords;
+  
+  newHead->next = NULL;
+  newHead->prev = head;
+  
+  if (head) {
+    head->next = newHead;
+    if (!tail) {
+      tail = head;
+    }
+  }
+  head = newHead;
+}
+
+/* Function: updateDirection
+ * -------------------------
+ * Read the pitch and roll of the accelerometer, and change the snake's direction accordingly. If the pitch and roll are within 7 degrees away from 0, the device is considered stationary. To prevent rapid switching between directions at transition points (ex: 45 degrees top left is the line between left and up), require that the pitch and roll value be different by 15 degrees
+ *
+ * Parameters: none
+ * Return values: none
+ */
 void updateDirection(void) {
-  float pitch = 0, roll = 0;
-  readAccelerometer(&pitch, &roll, pitchOffset, rollOffset);
+  readAccelerometer(pitchOffset, rollOffset);
 
   if (fabs(pitch) <= 7 && fabs(roll) <= 7 || fabs(pitch-roll) <= 15) {
     return;
@@ -440,39 +445,16 @@ void updateDirection(void) {
   }
 }
 
-void appendToHead(int x, int y) {
-  struct point newPoint = {x, y};
-  appendToHead(&newPoint);
-}
-
-void appendToHead(struct point *coords) {
-  struct Segment* newHead = (struct Segment*)malloc(sizeof(struct Segment));
-  newHead->coords = *coords;
-  
-  newHead->next = NULL;
-  newHead->prev = head;
-  
-  if (head) {
-    head->next = newHead;
-    if (!tail) {
-      tail = head;
-    }
-  }
-  head = newHead;
-}
-
-/*
- * Create a linked list based off a list of coordinates
+/* Function moveSnake
+ * -------------------
+ * Move the snake by one pixel in the direction of movement
+ * If the snake collides with a piece of food, grow by two pixels and generate a new food location
+ * If the snake collides with itself, the game is over
+ * Parameters: none
+ * Return values: none
  */
-void initializeSnake(struct point coords[], int numCoords) {
-  for (int i = 0; i < numCoords; i ++) {
-    appendToHead(&coords[i]);
-    world[coords[i].y][coords[i].x] = 1;
-    drawPixel(&(coords[i]));
-  }
-}
-
-void moveSnake() {
+void moveSnake(void) {
+	// grow the snake by 2 pixels at a time
   if (snakeIsGrowing) {
     switch(direction) {
       case LEFT:
@@ -520,7 +502,7 @@ void moveSnake() {
         break;
     }
     // swap the head node with the tail node
-    current = tail;
+    struct SnakeSegment *current = tail;
     tail->prev = head;
     current = tail;
     tail = tail->next;
@@ -529,6 +511,7 @@ void moveSnake() {
     head = current;
   }
 
+	// wrap around the screen
   if (head->coords.x >= ccolOledMax) {
     head->coords.x = 0;
   }
@@ -550,72 +533,27 @@ void moveSnake() {
       eraseFood();
       snakeIsGrowing = true;
     }
-    
     drawPixel(&(head->coords));
     world[head->coords.y][head->coords.x] = 1;
-
+		
+		// food is generated after the snake has been drawn so that it does not intersect with the snake
     if (snakeIsGrowing) {
       generateFood();
     } 
   }
 }
 
-void drawPixel(struct point* point) {
-  drawPixel(point->x, point->y);
-}
-void erasePixel(struct point* point) {
-  erasePixel(point->x, point->y);
-}
-void drawPixel(int x, int y) {
-  OrbitOledSetDrawMode(modOledSet);
-  OrbitOledMoveTo(x, y);
-  OrbitOledDrawPixel();
-}
-void erasePixel(int x, int y) {
-  OrbitOledSetDrawMode(modOledXor);
-  OrbitOledMoveTo(x, y);
-  OrbitOledDrawPixel();
-}
-void eraseFood() {
+void eraseFood(void) {
   for (int y = food.coords.y; y < food.coords.y+food.height; y ++) {
-    for (int x = food.coords.x;  x < food.coords.x+food.width;  x ++) {
+    for (int x = food.coords.x; x < food.coords.x+food.width;  x ++) {
       erasePixel(x,y);
       world[y][x] = 0;
     }
   }
 }
 
-void initializeOLED(void) {
-  OrbitOledInit();
-  OrbitOledClear();
-  OrbitOledClearBuffer();
-  OrbitOledSetFillPattern(OrbitOledGetStdPattern(iptnSolid));
-}
-
-/*
- * Reads and updates all of the input states
- * Returns a pointer to the input which has just had its state changed
- *  - if more than one input meets the above criteria, return a pointer to the one that is furthest along from the start of the INPUTS array
- *  - if no input meets the above criteria, return a NULL pointer
- */
-struct Input *updateInputs(void) {
-  struct Input* lastUpdatedInput = NULL;
-  int active = 0;
-  for (int i = 0; i < NUM_INPUTS; i ++) {
-    active = digitalRead(INPUTS[i].code);
-    if (active != INPUTS[i].active) {
-      lastUpdatedInput = &INPUTS[i];
-      INPUTS[i].active = active;
-    }
-  }
-  return lastUpdatedInput;
-}
-
-/*
-* Generate a new one in a random location on the screen.
-*/
 void generateFood(void) {
-  // make sure the food does not spawn within the snake or within one pixel of an of its segments
+  // make sure the food does not spawn within the snake or within one pixel of any of its segments
   do {
     food.coords.x = random(0, ccolOledMax-food.width);
     food.coords.y = random(0, crowOledMax-food.height);
@@ -628,10 +566,14 @@ void generateFood(void) {
     }
   }
 }
-/*
-* Checks if the attempted food spawn location intersects with the snake or within one pixel of each of its segments
-* return true if no intersections were found; Otherwise, return false
-*/
+/* Function: validateFoodLocation
+ * ------------------------------
+ * Check if any pixel of food is within one pixel of any of the snake's segments.
+ * 
+ * Parameters: none
+ * Return values: true if the food does not come within any part of the snake; Otherwise,
+ false.
+ */
 boolean validateFoodLocation(void) {
   for (int y = food.coords.y - (food.coords.y == 0 ? 0 : 1); y <= food.coords.y + food.height && y < crowOledMax; y ++) {
     for (int x = food.coords.x - (food.coords.x == 0 ? 0: 1);  x <= food.coords.x + food.width && x < ccolOledMax;  x ++) {
@@ -641,4 +583,27 @@ boolean validateFoodLocation(void) {
     }
   }
   return true;
+}
+
+void initOLED(void) {
+  OrbitOledInit();
+  OrbitOledClear();
+  OrbitOledClearBuffer();
+  OrbitOledSetFillPattern(OrbitOledGetStdPattern(iptnSolid));
+}
+void drawPixel(int x, int y) {
+  OrbitOledSetDrawMode(modOledSet);
+  OrbitOledMoveTo(x, y);
+  OrbitOledDrawPixel();
+}
+void drawPixel(struct point* point) {
+  drawPixel(point->x, point->y);
+}
+void erasePixel(int x, int y) {
+  OrbitOledSetDrawMode(modOledXor);
+  OrbitOledMoveTo(x, y);
+  OrbitOledDrawPixel();
+}
+void erasePixel(struct point* point) {
+  erasePixel(point->x, point->y);
 }
