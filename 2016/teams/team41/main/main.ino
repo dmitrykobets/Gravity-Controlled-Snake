@@ -121,7 +121,7 @@ void initMainMenuScreen(void) {
 }
 void runMainMenuScreen(void) {
   updateInputs();
-	if (lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
+	if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
 		int optionIndex = getSelectedOptionIndex();
 		switch (optionIndex) {
 			case 0:
@@ -189,15 +189,17 @@ void initGameScreen(void) {
 
 void runGameScreen(void) {
   updateInputs();
-  switch(lastUpdatedInput->code) {
-    case PF_0:
-      zeroAccelerometer();
-      break;
-    case PE_0:
-      if (lastUpdatedInput->active)
-        switchScreen(&mainMenuScreen);
-      return;
-  }
+	if (lastUpdatedInput) {
+		switch(lastUpdatedInput->code) {
+			case PF_0:
+				zeroAccelerometer();
+				break;
+			case PE_0:
+				if (lastUpdatedInput->active)
+					switchScreen(&mainMenuScreen);
+				return;
+		}
+	}
 
   updateDirection();
   moveSnake();
@@ -231,7 +233,7 @@ void initSettingsScreen(void) {
 
 void runSettingsScreen(void) {
   updateInputs();
-	if (lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
+	if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
 		int optionIndex = getSelectedOptionIndex();
 		switch (optionIndex) {
 			case 0:
@@ -268,7 +270,7 @@ void initDeathScreen(void) {
 }
 void runDeathScreen(void) {
   updateInputs();
-	if (lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
+	if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
 		int optionIndex = getSelectedOptionIndex();
 		switch (optionIndex) {
 			case 0:
@@ -296,21 +298,20 @@ void initCalibrateScreen() {
 
 void runCalibrateScreen() {
   updateInputs();
-  switch(lastUpdatedInput->code) {
-    case PD_2:
-      if (lastUpdatedInput->active) {
-        OrbitOledClear();
-        OrbitOledMoveTo(0,0);
-        OrbitOledDrawString("Calibrating...");
-        OrbitOledUpdate();
-        digitalWrite(GREEN_LED, HIGH);
-        zeroAccelerometer();
-        delay(1000);
-        digitalWrite(GREEN_LED, LOW);
-        switchScreen(&settingsScreen);
-        return;
-      }
-  }
+	if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
+		if (lastUpdatedInput->active) {
+			OrbitOledClear();
+			OrbitOledMoveTo(0,0);
+			OrbitOledDrawString("Calibrating...");
+			OrbitOledUpdate();
+			digitalWrite(GREEN_LED, HIGH);
+			zeroAccelerometer();
+			delay(1000);
+			digitalWrite(GREEN_LED, LOW);
+			switchScreen(&settingsScreen);
+			return;
+		}
+	}
 }
 /////////////////// end Calibrate //////////
 //////////////////////////////END SCREENS///////////////////////////////////////////
@@ -368,11 +369,12 @@ void loop() {
 /* Function: updateInputs
  * ---------------------
  * Update input states. The last input in the list to be updated is assigned to 
- * the "lastUpdatedInput" pointer.
+ * the "lastUpdatedInput" pointer. If no input has been updated, set "lastUpdatedInput" to NULL.
  * Parameters: none
  * Return values: none
  */
 void updateInputs(void) {
+	lastUpdatedInput = NULL;
   for (int i = 0; i < NUM_INPUTS; i ++) {
     int active = digitalRead(INPUTS[i].code);
     if (active != INPUTS[i].active) {

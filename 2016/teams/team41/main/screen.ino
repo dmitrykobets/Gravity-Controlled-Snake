@@ -18,6 +18,6 @@ void runScreen(void) {
 }
 void switchScreen(struct Screen *newScreen) {
 	endScreen();
-	initScreen();
 	curScreen = newScreen;
+	initScreen();
 }
