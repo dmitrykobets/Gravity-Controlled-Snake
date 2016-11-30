@@ -44,7 +44,7 @@ void drawPixel(struct point*);
 void drawPixel(int,int);
 void erasePixel(struct point*);
 void erasePixel(int,int);
-int cmpfunc (const void * a, const void * b);
+
 
 int alphaCounter=0;
 int FPS = 10;
@@ -83,16 +83,16 @@ struct SnakeSegment {
 };
 const int NUM_POINTS = 10;
 struct point points[NUM_POINTS] = {
-    {16, 15}, 
-    {17, 15}, 
-    {18, 15}, 
-    {19, 15}, 
-    {20, 15}, 
-    {21, 15}, 
-    {22, 15}, 
-    {23, 15}, 
-    {24, 15}, 
-    {25, 15}, 
+  {16, 15}, 
+  {17, 15}, 
+  {18, 15}, 
+  {19, 15}, 
+  {20, 15}, 
+  {21, 15}, 
+  {22, 15}, 
+  {23, 15}, 
+  {24, 15}, 
+  {25, 15}, 
 };
 
 struct SnakeSegment *head = NULL;
@@ -132,46 +132,37 @@ char *alphabet[] = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", 
 char *leaderboards[5];
 
 void eeepromInit(){
-
   SysCtlPeripheralEnable(SYSCTL_PERIPH_EEPROM0);
-  
   EEPROMInit();
 }
 
 void getLeaderboards(){
-
   uint32_t highScoreNames[15];
   uint32_t highScores[5];
   char **score1 = (char**)malloc(5 * sizeof(char *));
 
-
-  
   for (int i = 0; i < 5; ++i) {
-      score1[i] = (char *)malloc(sizeof(highScores[i]));
+    score1[i] = (char *)malloc(sizeof(highScores[i]));
   }
 
   EEPROMRead(highScoreNames,  0x400af200, sizeof(highScoreNames)); 
   EEPROMRead(highScores, EEPROMADDR, sizeof(highScores));  
   
-
   for (int i = 0; i<5; i++){
     char *str = "FFF";
     str = (char*)malloc(15*sizeof(char));
+
     for(int j=i*3; j<(i*3+3); j++){
       str[j-i*3] =  highScoreNames[j];
     }
+
     str[3]='\0';
     leaderboards[4-i]= str;
-    
   }
 
   for (int i = 0; i<5; i++){
     sprintf(score1[i], ": %lu", highScores[4-i]);
-
-    
     strcat(leaderboards[i], score1[i]);
-
-
   }
 
   for (int i = 0; i < 5; ++i) {
@@ -181,8 +172,8 @@ void getLeaderboards(){
   for (int i = 0; i < 5; ++i) {
       free(score1[i]);
   }
-  free(score1);
 
+  free(score1);
 }
 
 void initMainMenuScreen(void) {
@@ -202,12 +193,11 @@ void runMainMenuScreen(void) {
         return;
       case 2:
         getLeaderboards();
-
         switchScreen(&leaderboardScreen);
         return;
     }
-
   }
+
   readAccelerometer(pitchOffset, rollOffset);
   scroll(roll);
 }
@@ -231,7 +221,7 @@ void runLeaderboardScreen(void) {
 /////// end Main Menu ///////////
 
 void initAlphabetScreen(void) {
-  initScrollingMenu("main menu", alphabet, sizeof(alphabet)/sizeof(alphabet[0]));
+  initScrollingMenu("enter your name", alphabet, sizeof(alphabet)/sizeof(alphabet[0]));
 }
 
 void runAlphabetScreen(void) {
