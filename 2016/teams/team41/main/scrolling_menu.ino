@@ -17,9 +17,9 @@ int offset = 12;
 
 char *scrollingMenuTitle = "";
 
-const int MAX_SCROLLING_MENU_OPTIONS	= 5;
+const int MAX_SCROLLING_MENU_OPTIONS	= 26;
 int numScrollingMenuOptions = 0;
-char *scrollingMenuOptions[5] = {'\0'};
+char *scrollingMenuOptions[26] = {'\0'};
 
 void initScrollingMenu(char *newTitle, char *newOptions[], int numOptions) {
 	offset = INITIAL_OFFSET;
