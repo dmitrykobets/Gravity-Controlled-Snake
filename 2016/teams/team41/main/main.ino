@@ -489,7 +489,7 @@ void runCalibrateScreen() {
 	if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
 		if (lastUpdatedInput->active) {
 			OrbitOledClear();
-			OrbitOledMoveTo(0,0);
+      OrbitOledMoveTo(0,0);
 			OrbitOledDrawString("Calibrating...");
 			OrbitOledUpdate();
 			digitalWrite(GREEN_LED, HIGH);
