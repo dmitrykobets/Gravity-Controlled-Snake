@@ -498,18 +498,18 @@ void initCalibrateScreen() {
 void runCalibrateScreen() {
 updateInputs();
   if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
-  	if (lastUpdatedInput->active) {
-  		OrbitOledClear();
+	if (lastUpdatedInput->active) {
+		OrbitOledClear();
       OrbitOledMoveTo(0,0);
-  		OrbitOledDrawString("Calibrating...");
-  		OrbitOledUpdate();
-  		digitalWrite(GREEN_LED, HIGH);
-  		zeroAccelerometer();
-  		delay(1000);
-  		digitalWrite(GREEN_LED, LOW);
-  		switchScreen(&settingsScreen);
-  		return;
-  	}
+		OrbitOledDrawString("Calibrating...");
+		OrbitOledUpdate();
+		digitalWrite(GREEN_LED, HIGH);
+		zeroAccelerometer();
+		delay(1000);
+		digitalWrite(GREEN_LED, LOW);
+		switchScreen(&settingsScreen);
+		return;
+	}
   }
 }
 /////////////////// end Calibrate /////////////////// 
@@ -521,7 +521,7 @@ void setup() {
   delay(200);
   SysCtlPeripheralEnable(SYSCTL_PERIPH_EEPROM0);
   EEPROMInit();
- 	initAccelerometer();
+	initAccelerometer();
   for (int i = 0; i < NUM_INPUTS; i ++)
     pinMode(INPUTS[i].code, INPUT);
   pinMode(GREEN_LED, OUTPUT);
