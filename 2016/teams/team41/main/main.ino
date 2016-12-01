@@ -485,21 +485,21 @@ void initCalibrateScreen() {
 }
 
 void runCalibrateScreen() {
-  updateInputs();
-	if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
-		if (lastUpdatedInput->active) {
-			OrbitOledClear();
+updateInputs();
+  if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
+  	if (lastUpdatedInput->active) {
+  		OrbitOledClear();
       OrbitOledMoveTo(0,0);
-			OrbitOledDrawString("Calibrating...");
-			OrbitOledUpdate();
-			digitalWrite(GREEN_LED, HIGH);
-			zeroAccelerometer();
-			delay(1000);
-			digitalWrite(GREEN_LED, LOW);
-			switchScreen(&settingsScreen);
-			return;
-		}
-	}
+  		OrbitOledDrawString("Calibrating...");
+  		OrbitOledUpdate();
+  		digitalWrite(GREEN_LED, HIGH);
+  		zeroAccelerometer();
+  		delay(1000);
+  		digitalWrite(GREEN_LED, LOW);
+  		switchScreen(&settingsScreen);
+  		return;
+  	}
+  }
 }
 /////////////////// end Calibrate /////////////////// 
 
