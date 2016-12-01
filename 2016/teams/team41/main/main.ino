@@ -18,16 +18,11 @@
 
 /*
 TODO:
-change food spawn algorithm to detect when it's impossible to spawn food (game is over) and minimize random attempts (so basically make it not entirely random
-separate scrolling menu from input and accelerometer logic (not too big of a deal)
-
-see if can added a low-pass filter to the data instead of taking an average of 5 readings
-see if can change the data array in accelerometer.c to be of type uint16_t
+NOTHING LUL
 */
 
+void getLeaderboards(void);
 void updateInputs(void); 
-void eepromInit(void);
-
 
 void initSnake(struct point[], int);
 void appendToHead(struct point*);
@@ -46,11 +41,12 @@ void erasePixel(struct point*);
 void erasePixel(int,int);
 
 
-int alphaCounter=0;
-int FPS = 10;
-int location = 0;
+int letterCounter = 0;
+int rankOfNewScore = 0;
 uint32_t score = 0;
-  uint32_t name[3];
+uint32_t name[3];
+
+int FPS = 10;
 
 struct Input {
   const int code;
@@ -81,6 +77,7 @@ struct SnakeSegment {
   struct SnakeSegment *next; // towards head
   struct SnakeSegment *prev; // towards tail
 };
+
 const int NUM_POINTS = 10;
 struct point points[NUM_POINTS] = {
   {16, 15}, 
@@ -123,59 +120,19 @@ struct Screen settingsScreen;
 struct Screen deathScreen;
 struct Screen calibrateScreen;
 struct Screen winScreen;
-struct Screen alphabetScreen;
+struct Screen nameScreen;
 struct Screen leaderboardScreen;
 
-/////// Main Menu ////////////
+//////////////////////////////////// OPTIONS FOR MENU SCREENS ////////////////////////////////////////
 char *mainMenuOptions[] = {"play game", "settings", "leaderboards"};
-char *alphabet[] = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"};
+char *nameOptions[] = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"};
+char *deathOptions[] = {"try again", "give up"};
+char *settingsOptions[] = {"back to menu", "calibrate"};
 char *leaderboards[5];
 
-void eeepromInit(){
-  SysCtlPeripheralEnable(SYSCTL_PERIPH_EEPROM0);
-  EEPROMInit();
-}
+//////////////////////////////SCREEN FUNCTIONS///////////////////////////////////////////
 
-void getLeaderboards(){
-  uint32_t highScoreNames[15];
-  uint32_t highScores[5];
-  char **score1 = (char**)malloc(5 * sizeof(char *));
-
-  for (int i = 0; i < 5; ++i) {
-    score1[i] = (char *)malloc(sizeof(highScores[i]));
-  }
-
-  EEPROMRead(highScoreNames,  0x400af200, sizeof(highScoreNames)); 
-  EEPROMRead(highScores, EEPROMADDR, sizeof(highScores));  
-  
-  for (int i = 0; i<5; i++){
-    char *str = "FFF";
-    str = (char*)malloc(15*sizeof(char));
-
-    for(int j=i*3; j<(i*3+3); j++){
-      str[j-i*3] =  highScoreNames[j];
-    }
-
-    str[3]='\0';
-    leaderboards[4-i]= str;
-  }
-
-  for (int i = 0; i<5; i++){
-    sprintf(score1[i], ": %lu", highScores[4-i]);
-    strcat(leaderboards[i], score1[i]);
-  }
-
-  for (int i = 0; i < 5; ++i) {
-      Serial.println(leaderboards[i]);
-  }
-
-  for (int i = 0; i < 5; ++i) {
-      free(score1[i]);
-  }
-
-  free(score1);
-}
-
+/////////////////// Main Menu ///////////////////
 void initMainMenuScreen(void) {
   initScrollingMenu("main menu", mainMenuOptions, sizeof(mainMenuOptions)/sizeof(mainMenuOptions[0]));
 }
@@ -201,7 +158,52 @@ void runMainMenuScreen(void) {
   readAccelerometer(pitchOffset, rollOffset);
   scroll(roll);
 }
+/////////////////// end Main Menu ///////////////////
 
+/////////////////// Leaderboard ///////////////////
+void getLeaderboards(){
+  uint32_t highScoreNames[15];
+  uint32_t highScores[5];
+
+  char **scoresString;
+
+
+  EEPROMRead(highScoreNames,  0x400af200, sizeof(highScoreNames)); 
+  EEPROMRead(highScores, EEPROMADDR, sizeof(highScores));  
+  
+  scoresString = (char**)malloc(5 * sizeof(char *));
+  for (int i = 0; i < 5; ++i) {
+    scoresString[i] = (char *)malloc(sizeof(highScores[i]));
+  }
+
+
+  for (int i = 0; i<5; i++){
+    char *str;
+
+    str = (char*)malloc(15*sizeof(char));
+
+    for(int j=0; j<3; j++){
+      str[j] =  highScoreNames[i*3+j];
+    }
+
+    str[3] = '\0';
+    leaderboards[4-i]= str;
+    
+  }
+
+  for (int i = 0; i<5; i++){
+    sprintf(scoresString[i], ": %lu", highScores[4-i]);
+    strcat(leaderboards[i], scoresString[i]);
+  }
+
+  
+
+  for (int i = 0; i < 5; ++i) {
+      free(scoresString[i]);
+  }
+
+  free(scoresString);
+}
 
 void initLeaderboardScreen(void) {
   initScrollingMenu("leaderboards", leaderboards, sizeof(leaderboards)/sizeof(leaderboards[0]));
@@ -216,74 +218,57 @@ void runLeaderboardScreen(void) {
 	readAccelerometer(pitchOffset, rollOffset);
 	scroll(roll);
 }
+/////////////////// end Leaderboard ///////////////////
 
-
-/////// end Main Menu ///////////
-
-void initAlphabetScreen(void) {
-  initScrollingMenu("enter your name", alphabet, sizeof(alphabet)/sizeof(alphabet[0]));
+/////////////////// Name Screen ///////////////////
+void initNameScreen(void) {
+  initScrollingMenu("enter your name", nameOptions, sizeof(nameOptions)/sizeof(nameOptions[0]));
 }
 
-void runAlphabetScreen(void) {
+void runNameScreen(void) {
   uint32_t highScoreNames[15];
   
   updateInputs();
+
   if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
     int optionIndex = getSelectedOptionIndex();
-    if (optionIndex==-1){
-      optionIndex=0;
-    }
-    EEPROMRead(highScoreNames,  0x400af200, sizeof(highScoreNames));  
+    if (optionIndex>=0){
+      EEPROMRead(highScoreNames,  0x400af200, sizeof(highScoreNames));  
 
-    name[alphaCounter] = optionIndex + 65;
-
-
-    alphaCounter++;
-    if (alphaCounter<3){
-
-
-      switchScreen(&alphabetScreen);
+      name[letterCounter] = optionIndex + 65;
+      letterCounter++;
       
-      return;
-    }
-    else{
-      alphaCounter=0;
+      if (letterCounter<3){
+        switchScreen(&nameScreen);
+        return;
+      }
+
+      else{
+        letterCounter=0;
+        for (int i = 0; i<3; i++){
+          for (int j = 0; j<3*rankOfNewScore-i+2; j++){
+            highScoreNames[j]=highScoreNames[j+1];
+          }
+        }
       
-      for (int j = 0; j<3; j++){
-        for (int i = 0; i<3*location-j+2; i++){
-        highScoreNames[i]=highScoreNames[i+1];
-      
+        for (int i= 3*rankOfNewScore; i<3*rankOfNewScore+3; i++){
+          highScoreNames[i]=name[i-3*rankOfNewScore];
+        
         }
 
-      }
-      
-      for (int i= 3*location; i<3*location+3; i++){
-        highScoreNames[i]=name[i-3*location];
-        
-      }
-
-      
-
-      for(int i=0; i<15; i++){
-        Serial.println(highScoreNames[i]);
-      }
-
-
-      EEPROMProgram(highScoreNames,  0x400af200, sizeof(highScoreNames));  
-
-      switchScreen(&mainMenuScreen);
-      return;
-
+        EEPROMProgram(highScoreNames,  0x400af200, sizeof(highScoreNames));  
+        switchScreen(&mainMenuScreen);
+        return;
     }
-
-
   }
+}
   readAccelerometer(pitchOffset, rollOffset);
   scroll(roll);
-}
+  
+}     
+/////////////////// end Name Screen ///////////////////
 
-
-//////// Game ///////////////////
+/////////////////// Game ///////////////////
 void initGameScreen(void) {
   snakeIsGrowing = false;
   snakeIsDead = false;
@@ -365,11 +350,9 @@ void endGameScreen(void) {
 
   tail = head = NULL;
 }
-/////////////////////// end Game /////////////////////
+/////////////////// end Game ///////////////////
 
-///////////////// Settings ///////////////////////////
-char *settingsOptions[] = {"back to menu", "calibrate"};
-
+/////////////////// Settings ///////////////////
 void initSettingsScreen(void) {
   initScrollingMenu("settings", settingsOptions, sizeof(settingsOptions)/sizeof(settingsOptions[0]));
 }
@@ -390,11 +373,9 @@ void runSettingsScreen(void) {
   readAccelerometer(pitchOffset, rollOffset);
   scroll(roll);
 }
-/////////////////// end Settings ////////////////
+/////////////////// end Settings ///////////////////
 
-//////////////////////// Death //////////////////
-char *deathOptions[] = {"try again", "give up"};
-
+/////////////////// Death ///////////////////
 void printScoreMSGs(int x, int y, int time, char* msg){
 
     OrbitOledMoveTo(x, y);
@@ -405,14 +386,12 @@ void printScoreMSGs(int x, int y, int time, char* msg){
 
 }
 
-
 void initDeathScreen(void) {
   uint32_t highScores[5];
   char scoreMsg[30] = "Score: ";
   char score1[10];
-  int replace = 0;
+  boolean isHighScore = false;
  
-  
   OrbitOledSetDrawMode(modOledSet);
   printScoreMSGs(10,10, 1500, "You died!");
   printScoreMSGs(20,20,1500, "... pathetic");
@@ -424,18 +403,16 @@ void initDeathScreen(void) {
 
   for (int i =0; i<5; i++){
     if (score>highScores[i]){
-      replace =1;
-      location = i;
+      isHighScore = true ;
+      rankOfNewScore = i;
     }
   }
   
-  if (replace){
-
-    for (int i = 0; i<location; i++){
-        highScores[i]=highScores[i+1];
-        
+  if (isHighScore){
+    for (int i = 0; i<rankOfNewScore; i++){
+      highScores[i]=highScores[i+1];
     }
-    highScores[location]=score;
+    highScores[rankOfNewScore]=score;
  
     OrbitOledSetDrawMode(modOledSet);
     OrbitOledMoveTo(0, 0);
@@ -446,18 +423,16 @@ void initDeathScreen(void) {
     delay(1500);
 
     EEPROMProgram(highScores, EEPROMADDR, sizeof(highScores));  
-    replace = 0;
+    isHighScore = false;
     score = 0;
-    switchScreen(&alphabetScreen);
+    switchScreen(&nameScreen);
     return;
   }
   score = 0;
   switchScreen(&mainMenuScreen);
   return;
-
-  
-  
 }
+
 void runDeathScreen(void) {
   updateInputs();
 	if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
@@ -474,9 +449,9 @@ void runDeathScreen(void) {
 	readAccelerometer(pitchOffset, rollOffset);
 	scroll(roll);
 }
-///////////////////// end Death //////////////
+/////////////////// end Death ///////////////////
 
-//////////////////////// Win //////////////////
+/////////////////// Win ///////////////////
 char *winOptions[] = {"start again", "main menu"};
 
 void initWinScreen(void) {
@@ -509,9 +484,9 @@ void runWinScreen(void) {
 	readAccelerometer(pitchOffset, rollOffset);
 	scroll(roll);
 }
-///////////////////// end Win //////////////
+/////////////////// end Win /////////////////// 
 
-/////////////////// Calibrate ///////////////
+/////////////////// Calibrate /////////////////// 
 void initCalibrateScreen() {
   OrbitOledSetDrawMode(modOledSet);
   OrbitOledMoveTo(0, 0);
@@ -538,13 +513,15 @@ void runCalibrateScreen() {
 		}
 	}
 }
-/////////////////// end Calibrate //////////
-//////////////////////////////END SCREENS///////////////////////////////////////////
+/////////////////// end Calibrate /////////////////// 
+
+////////////////////////////////// END SCREEN FUNCTIONS //////////////////////////////////
 
 void setup() {
   WireInit();
   delay(200);
-  eeepromInit();
+  SysCtlPeripheralEnable(SYSCTL_PERIPH_EEPROM0);
+  EEPROMInit();
  	initAccelerometer();
   for (int i = 0; i < NUM_INPUTS; i ++)
     pinMode(INPUTS[i].code, INPUT);
@@ -583,9 +560,9 @@ void setup() {
     .run = runCalibrateScreen,
     .end = NULL
   };
-  alphabetScreen = {
-    .init = initAlphabetScreen,
-    .run = runAlphabetScreen,
+  nameScreen = {
+    .init = initNameScreen,
+    .run = runNameScreen,
     .end = NULL
   };
   leaderboardScreen = {
@@ -818,6 +795,7 @@ void generateFood(void) {
     }
   }
 }
+
 /* Function: validateFoodLocation
  * ------------------------------
  * Check if any pixel of food is within one pixel of any of the snake's segments.
@@ -843,19 +821,23 @@ void initOLED(void) {
   OrbitOledClearBuffer();
   OrbitOledSetFillPattern(OrbitOledGetStdPattern(iptnSolid));
 }
+
 void drawPixel(int x, int y) {
   OrbitOledSetDrawMode(modOledSet);
   OrbitOledMoveTo(x, y);
   OrbitOledDrawPixel();
 }
+
 void drawPixel(struct point* point) {
   drawPixel(point->x, point->y);
 }
+
 void erasePixel(int x, int y) {
   OrbitOledSetDrawMode(modOledXor);
   OrbitOledMoveTo(x, y);
   OrbitOledDrawPixel();
 }
+
 void erasePixel(struct point* point) {
   erasePixel(point->x, point->y);
 }
