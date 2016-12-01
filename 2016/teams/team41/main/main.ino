@@ -128,6 +128,7 @@ char *mainMenuOptions[] = {"play game", "settings", "leaderboards"};
 char *nameOptions[] = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"};
 char *deathOptions[] = {"try again", "give up"};
 char *settingsOptions[] = {"back to menu", "calibrate"};
+char *winOptions[] = {"start again", "main menu"};
 char *leaderboards[5];
 
 //////////////////////////////SCREEN FUNCTIONS///////////////////////////////////////////
@@ -154,7 +155,6 @@ void runMainMenuScreen(void) {
         return;
     }
   }
-
   readAccelerometer(pitchOffset, rollOffset);
   scroll(roll);
 }
@@ -164,18 +164,15 @@ void runMainMenuScreen(void) {
 void getLeaderboards(){
   uint32_t highScoreNames[15];
   uint32_t highScores[5];
-
   char **scoresString;
-
 
   EEPROMRead(highScoreNames,  0x400af200, sizeof(highScoreNames)); 
   EEPROMRead(highScores, EEPROMADDR, sizeof(highScores));  
   
   scoresString = (char**)malloc(5 * sizeof(char *));
   for (int i = 0; i < 5; ++i) {
-    scoresString[i] = (char *)malloc(sizeof(highScores[i]));
+    scoresString[i] = (char *)malloc(6*sizeof(char));
   }
-
 
   for (int i = 0; i<5; i++){
     char *str;
@@ -188,7 +185,6 @@ void getLeaderboards(){
 
     str[3] = '\0';
     leaderboards[4-i]= str;
-    
   }
 
   for (int i = 0; i<5; i++){
@@ -196,10 +192,8 @@ void getLeaderboards(){
     strcat(leaderboards[i], scoresString[i]);
   }
 
-  
-
   for (int i = 0; i < 5; ++i) {
-      free(scoresString[i]);
+    free(scoresString[i]);
   }
 
   free(scoresString);
@@ -259,12 +253,11 @@ void runNameScreen(void) {
         EEPROMProgram(highScoreNames,  0x400af200, sizeof(highScoreNames));  
         switchScreen(&mainMenuScreen);
         return;
+      }
     }
   }
-}
   readAccelerometer(pitchOffset, rollOffset);
   scroll(roll);
-  
 }     
 /////////////////// end Name Screen ///////////////////
 
@@ -377,13 +370,11 @@ void runSettingsScreen(void) {
 
 /////////////////// Death ///////////////////
 void printScoreMSGs(int x, int y, int time, char* msg){
-
-    OrbitOledMoveTo(x, y);
-    OrbitOledDrawString(msg);
-    OrbitOledUpdate();
-    delay(time);
-    OrbitOledClear();
-
+  OrbitOledMoveTo(x, y);
+  OrbitOledDrawString(msg);
+  OrbitOledUpdate();
+  delay(time);
+  OrbitOledClear();
 }
 
 void initDeathScreen(void) {
@@ -452,8 +443,6 @@ void runDeathScreen(void) {
 /////////////////// end Death ///////////////////
 
 /////////////////// Win ///////////////////
-char *winOptions[] = {"start again", "main menu"};
-
 void initWinScreen(void) {
 	OrbitOledMoveTo(0, 0);
 	for (int i = 0; i < 6; i ++) {
