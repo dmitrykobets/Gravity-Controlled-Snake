@@ -40,11 +40,10 @@ void drawPixel(int,int);
 void erasePixel(struct point*);
 void erasePixel(int,int);
 
-
-int letterCounter = 0;
+int letterCounter =0;
 int rankOfNewScore = 0;
 uint32_t score = 0;
-uint32_t name[3];
+uint32_t playerName[3];
 
 int FPS = 10;
 
@@ -228,26 +227,28 @@ void runNameScreen(void) {
     if (optionIndex>=0){
       EEPROMRead(highScoreNames,  0x400af200, sizeof(highScoreNames));  
 
-      name[letterCounter] = optionIndex + 65;
+      playerName[letterCounter] = optionIndex + 65;
       letterCounter++;
       
-      if (letterCounter<3){
-        switchScreen(&nameScreen);
-        return;
-      }
+      
 
-      else{
+      if (letterCounter>=3) {
         letterCounter=0;
         for (int i = 3; i <= 3*rankOfNewScore+2; i ++) {
           highScoreNames[i-3] = highScoreNames[i];
         }
       
         for (int i= 3*rankOfNewScore; i<3*rankOfNewScore+3; i++){
-          highScoreNames[i]=name[i-3*rankOfNewScore];
+          highScoreNames[i]=playerName[i-3*rankOfNewScore];
         
         }
 
         EEPROMProgram(highScoreNames,  0x400af200, sizeof(highScoreNames));  
+        
+        for (int i=0; i<3; i++){
+          playerName[i]=0;
+        }
+
         switchScreen(&mainMenuScreen);
         return;
       }
@@ -255,6 +256,18 @@ void runNameScreen(void) {
   }
   readAccelerometer(pitchOffset, rollOffset);
   scroll(roll);
+
+  char playerNameString[3];  
+  for (int i=0; i<3; i++){
+    playerNameString[i]=(char)playerName[i];
+  }
+  extern int clrOledCur; 
+  clrOledCur= 0x0;
+  OrbitOledSetDrawMode(modOledSet);
+  OrbitOledMoveTo(0, crowOledMax-8);
+  OrbitOledDrawString(playerNameString);
+  OrbitOledUpdate();
+  clrOledCur = 0x01;
 }     
 /////////////////// end Name Screen ///////////////////
 
