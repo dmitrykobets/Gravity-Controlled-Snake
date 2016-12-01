@@ -1,6 +1,5 @@
 #include "screen.h"
 
-
 struct Screen *curScreen;
 
 void initScreen(void) {

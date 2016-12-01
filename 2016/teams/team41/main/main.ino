@@ -52,6 +52,7 @@ struct Input {
   const int code;
   boolean active; // for switches, this corresponds to the "up" position. For buttons, this corresponds to the "pressed" position
 };
+
 struct Input *lastUpdatedInput = NULL;
 
 const int NUM_INPUTS = 3;
@@ -176,7 +177,6 @@ void getLeaderboards(){
 
   for (int i = 0; i<5; i++){
     char *str;
-
     str = (char*)malloc(15*sizeof(char));
 
     for(int j=0; j<3; j++){
@@ -207,7 +207,6 @@ void runLeaderboardScreen(void) {
   updateInputs();
 	if (lastUpdatedInput && lastUpdatedInput->code == PD_2 && lastUpdatedInput->active) {
 		switchScreen(&mainMenuScreen);
-    
 	}
 	readAccelerometer(pitchOffset, rollOffset);
 	scroll(roll);
