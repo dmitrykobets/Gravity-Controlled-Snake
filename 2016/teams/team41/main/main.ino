@@ -238,10 +238,8 @@ void runNameScreen(void) {
 
       else{
         letterCounter=0;
-        for (int i = 0; i<3; i++){
-          for (int j = 0; j<3*rankOfNewScore-i+2; j++){
-            highScoreNames[j]=highScoreNames[j+1];
-          }
+        for (int i = 3; i <= 3*rankOfNewScore+2; i ++) {
+          highScoreNames[i-3] = highScoreNames[i];
         }
       
         for (int i= 3*rankOfNewScore; i<3*rankOfNewScore+3; i++){
