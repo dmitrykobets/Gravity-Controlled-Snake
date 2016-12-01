@@ -16,11 +16,6 @@
 #include "scrolling_menu.h"
 #include "accelerometer.h"
 
-/*
-TODO:
-NOTHING LUL
-*/
-
 void getLeaderboards(void);
 void updateInputs(void); 
 
